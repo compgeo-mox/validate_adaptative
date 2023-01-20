@@ -1,0 +1,4 @@
+OMEGA_1 =  1
+OMEGA_2 = 0
+INTERFACE = 2
+NONE = -1
