@@ -34,12 +34,12 @@ def main():
     spe10.read_perm("./spe10_perm/")
 
     # create the discretization
-    discr = Flow(spe10.gb, discr = pp.MVEM)
+    discr = Flow(spe10.mdg, discr = pp.MVEM)
     test_data = Data(epsilon, u_bar, spe10)
 
-    for g, d in spe10.gb:
+    for sd, d in spe10.mdg.subdomains(return_data=True):
         d.update({pp.STATE: {}})
-        flux = np.zeros((3, g.num_cells))
+        flux = np.zeros((3, sd.num_cells))
         d[pp.STATE].update({Flow.P0_flux: flux})
         d[pp.STATE].update({Flow.P0_flux + "_old": flux})
 
@@ -61,7 +61,7 @@ def main():
         all_flux = np.empty((3, 0))
         all_flux_old = np.empty((3, 0))
         all_cell_volumes = np.empty(0)
-        for g, d in spe10.gb:
+        for sd, d in spe10.mdg.subdomains(return_data=True):
             # collect the current flux
             flux = d[pp.STATE][Flow.P0_flux]
             all_flux = np.hstack((all_flux, flux))
@@ -69,7 +69,7 @@ def main():
             flux_old = d[pp.STATE][Flow.P0_flux + "_old"]
             all_flux_old = np.hstack((all_flux_old, flux_old))
             # collect the cell volumes
-            all_cell_volumes = np.hstack((all_cell_volumes, g.cell_volumes))
+            all_cell_volumes = np.hstack((all_cell_volumes, sd.cell_volumes))
             # save the old flux
             d[pp.STATE][Flow.P0_flux + "_old"] = flux
 
@@ -79,14 +79,17 @@ def main():
         err_non_linear = err_non_linear / norm_flux_old if norm_flux_old != 0 else err_non_linear
 
         # exporter
-        save = pp.Exporter(spe10.gb, "sol_" + file_name, folder_name=folder_name)
+        save = pp.Exporter(spe10.mdg, "sol_" + file_name, folder_name=folder_name)
         save.write_vtu(variable_to_export, time_step=iteration_non_linear)
 
         print("iteration non-linear problem", iteration_non_linear, "error", err_non_linear)
         iteration_non_linear += 1
 
-    save.write_pvd(np.arange(iteration_non_linear), np.arange(iteration_non_linear))
+    save.write_pvd(np.arange(iteration_non_linear))
     write_network_pvd(file_name, folder_name, np.arange(iteration_non_linear))
+
+    for sd, d in spe10.mdg.subdomains(return_data=True):
+        np.savetxt(Flow.region, d[pp.STATE][Flow.region])
 
 # ------------------------------------------------------------------------------#
 

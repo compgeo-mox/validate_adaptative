@@ -13,10 +13,10 @@ class Flow(object):
 
     # ------------------------------------------------------------------------------#
 
-    def __init__(self, gb, model="flow", discr=pp.RT0):
+    def __init__(self, mdg, model="flow", discr=pp.RT0):
 
         self.model = model
-        self.gb = gb
+        self.mdg = mdg
         self.data = None
         self.data_time = None
         self.assembler = None
@@ -43,40 +43,40 @@ class Flow(object):
     def set_data(self, data):
         self.data = data
 
-        for g, d in self.gb:
+        for sd, d in self.mdg.subdomains(return_data=True):
             param = {}
 
             d["deviation_from_plane_tol"] = 1e-8
             d["is_tangential"] = True
 
             # assign permeability
-            k = data["k"](g, d, self)
+            k = data["k"](sd, d, self)
 
             # no source term is assumed by the user
-            if g.dim == 1:
+            if sd.dim == 1:
                 param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=1, kzz=1)
-            elif g.dim == 2:
+            elif sd.dim == 2:
                 param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=k, kzz=1)
-            param["source"] = data["source"](g, d, self)
-            param["vector_source"] = data["vector_source"](g, d, self)
+            param["source"] = data["source"](sd, d, self)
+            param["vector_source"] = data["vector_source"](sd, d, self)
 
             # Boundaries
-            b_faces = g.tags["domain_boundary_faces"].nonzero()[0]
+            b_faces = sd.tags["domain_boundary_faces"].nonzero()[0]
             if b_faces.size:
-                labels, param["bc_values"] = data["bc"](g, data, data["tol"], self)
-                param["bc"] = pp.BoundaryCondition(g, b_faces, labels)
+                labels, param["bc_values"] = data["bc"](sd, data, data["tol"], self)
+                param["bc"] = pp.BoundaryCondition(sd, b_faces, labels)
             else:
-                param["bc_values"] = np.zeros(g.num_faces)
-                param["bc"] = pp.BoundaryCondition(g, np.empty(0), np.empty(0))
+                param["bc_values"] = np.zeros(sd.num_faces)
+                param["bc"] = pp.BoundaryCondition(sd, np.empty(0), np.empty(0))
 
-            pp.initialize_data(g, d, self.model, param)
+            pp.initialize_data(sd, d, self.model, param)
 
     # ------------------------------------------------------------------------------#
 
     def matrix_rhs(self):
 
         # set the discretization for the grids
-        for g, d in self.gb:
+        for sd, d in self.mdg.subdomains(return_data=True):
             discr = self.discr(self.model)
             source = self.source(self.model)
 
@@ -86,26 +86,26 @@ class Flow(object):
             d[pp.DISCRETIZATION_MATRICES] = {self.model: {}}
 
         # define the interface terms to couple the grids
-        for e, d in self.gb.edges():
-            g_slave, g_master = self.gb.nodes_of_edge(e)
+        for e, d in self.mdg.interfaces(return_data=True):
+            gl, gh = mdg.interface_to_subdomain_pair(e)
 
             # retrive the discretization of the master and slave grids
-            discr_master = self.gb.node_props(g_master, pp.DISCRETIZATION)[self.variable][self.discr_name]
-            discr_slave = self.gb.node_props(g_slave, pp.DISCRETIZATION)[self.variable][self.discr_name]
+            discr_master = self.mdg.node_props(gh, pp.DISCRETIZATION)[self.variable][self.discr_name]
+            discr_slave = self.mdg.node_props(gl, pp.DISCRETIZATION)[self.variable][self.discr_name]
             coupling = self.coupling(self.model, discr_master, discr_slave)
 
             d[pp.PRIMARY_VARIABLES] = {self.mortar: {"cells": 1}}
             d[pp.COUPLING_DISCRETIZATION] = {
                 self.coupling_name: {
-                    g_slave: (self.variable, self.discr_name),
-                    g_master: (self.variable, self.discr_name),
+                    gl: (self.variable, self.discr_name),
+                    gh: (self.variable, self.discr_name),
                     e: (self.mortar, coupling),
                 }
             }
             d[pp.DISCRETIZATION_MATRICES] = {self.model: {}}
 
         # assembler
-        self.assembler = pp.Assembler(self.gb)
+        self.assembler = pp.Assembler(self.mdg)
         self.assembler.discretize()
         return self.assembler.assemble_matrix_rhs()
 
@@ -115,21 +115,21 @@ class Flow(object):
         self.assembler.distribute_variable(x)
 
         discr = self.discr(self.model)
-        for g, d in self.gb:
+        for sd, d in self.mdg.subdomains(return_data=True):
             var = d[pp.STATE][self.variable]
-            d[pp.STATE][self.pressure] = discr.extract_pressure(g, var, d)
-            d[pp.STATE][self.flux] = discr.extract_flux(g, var, d)
+            d[pp.STATE][self.pressure] = discr.extract_pressure(sd, var, d)
+            d[pp.STATE][self.flux] = discr.extract_flux(sd, var, d)
             d[pp.STATE][self.permeability] = np.log10(d[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0])
 
-            if "original_id" in g.tags:
-                d[pp.STATE]["original_id"] = g.tags["original_id"] * np.ones(g.num_cells)
-            if "condition" in g.tags:
-                d[pp.STATE]["condition"] = g.tags["condition"] * np.ones(g.num_cells)
+            if "original_id" in sd.tags:
+                d[pp.STATE]["original_id"] = sd.tags["original_id"] * np.ones(sd.num_cells)
+            if "condition" in sd.tags:
+                d[pp.STATE]["condition"] = sd.tags["condition"] * np.ones(sd.num_cells)
 
         # export the P0 flux reconstruction
-        pp.project_flux(self.gb, discr, self.flux, self.P0_flux, self.mortar)
+        pp.project_flux(self.mdg, discr, self.flux, self.P0_flux, self.mortar)
 
-        for g, d in self.gb:
+        for _, d in self.mdg.subdomains(return_data=True):
             norm = np.linalg.norm(d[pp.STATE][self.P0_flux], axis=0)
             d[pp.STATE][self.P0_flux_norm] = norm
             if u_bar is not None:

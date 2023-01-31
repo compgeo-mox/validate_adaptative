@@ -18,8 +18,8 @@ class Spe10(object):
         self.n = 0
         self._compute_size()
 
-        self.gb = None
-        self._create_gb()
+        self.mdg = None
+        self._create_mdg()
 
         self.perm = None
         self.layers_id = None
@@ -42,12 +42,12 @@ class Spe10(object):
 
 # ------------------------------------------------------------------------------#
 
-    def _create_gb(self,):
-        g = pp.CartGrid(self.shape, self.physdims)
-        g.compute_geometry()
+    def _create_mdg(self,):
+        sd = pp.CartGrid(self.shape, self.physdims)
+        sd.compute_geometry()
 
-        # it's only one grid but the solver is build on a gb
-        self.gb = pp.meshing.grid_list_to_grid_bucket([g])
+        # it's only one grid but the solver is build on a mdg
+        self.mdg = pp.meshing.subdomains_to_mdg([sd])
 
 # ------------------------------------------------------------------------------#
 
@@ -82,7 +82,7 @@ class Spe10(object):
                  "perm_xx", "perm_yy", "perm_zz"]
 
         # for visualization export the perm and layer id
-        for _, d in self.gb:
+        for _, d in self.mdg.subdomains(return_data=True):
 
             d[pp.STATE][names[0]] = np.log10(self.perm[:, 0])
             d[pp.STATE][names[1]] = np.log10(self.perm[:, 1])
