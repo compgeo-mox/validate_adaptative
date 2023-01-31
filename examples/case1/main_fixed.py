@@ -12,7 +12,7 @@ from exporter import write_network_pvd, make_file_name
 
 # ------------------------------------------------------------------------------#
 
-def main():
+def main(region):
 
     # tolerance in the computation
     tol = 1e-10
@@ -23,7 +23,7 @@ def main():
     u_bar = 1e-7/32 # 1 0.5 0.25 0.125 0.0625 0.03125
 
     file_name = "case1"
-    folder_name = "./adaptative/"
+    folder_name = "./fixed/"
     variable_to_export = [Flow.pressure, Flow.P0_flux, Flow.permeability, Flow.P0_flux_norm, Flow.region]
 
     max_iteration_non_linear = 20
@@ -35,7 +35,7 @@ def main():
 
     # create the discretization
     discr = Flow(spe10.mdg, discr = pp.MVEM)
-    test_data = Data(spe10, epsilon, u_bar)
+    test_data = Data(spe10, epsilon, u_bar, region=region)
 
     for sd, d in spe10.mdg.subdomains(return_data=True):
         d.update({pp.STATE: {}})
@@ -89,9 +89,25 @@ def main():
     write_network_pvd(file_name, folder_name, np.arange(iteration_non_linear))
 
     for sd, d in spe10.mdg.subdomains(return_data=True):
-        np.savetxt(Flow.region, d[pp.STATE][Flow.region])
+        if region is None:
+            np.savetxt(Flow.region, d[pp.STATE][Flow.region])
+        flux = d[pp.STATE][Flow.P0_flux]
+        pressure = d[pp.STATE][Flow.pressure]
+
+    return flux, pressure
 
 # ------------------------------------------------------------------------------#
 
+# DA FARE RITORNARE I VALORI PRESSIONE E FLUSSO IN MODO DA CONFRONTARLI
+
 if __name__ == "__main__":
-    main()
+    print("Perform the adaptative scheme")
+    q_adapt, p_adapt = main(None)
+    print("Perform the heterogeneous scheme")
+    q_hete, p_hete = main("region")
+    print("Perform the darcy-based scheme")
+    q_darcy, p_darcy = main("region_darcy")
+    print("Perform the forshheimer-based scheme")
+    q_forsh, p_forsh = main("region_forsh")
+
+    import pdb; pdb.set_trace()

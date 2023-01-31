@@ -8,13 +8,19 @@ from permeability_convolve import *
 
 class Data:
 
-    def __init__(self, epsilon, u_bar, spe10, tol=1e-6):
-        self.epsilon = epsilon
-        self.u_bar = u_bar
+    def __init__(self, spe10, epsilon=None, u_bar=None, region=None, tol=1e-6, num=100000):
         self.spe10 = spe10
         self.tol = tol
 
-        num = 100000
+        # it is possible to have or epsilon and u_bar or the region file name
+        if region is not None:
+            self.region = np.loadtxt(region).astype(bool)
+        else:
+            self.region = None
+
+        # posso mettere la k adapt e le altre due come casi particolari usando pero' gli stessi dati
+        u_bar = 1
+
 
         # Darcy: data 1/k_1 and 1/k_2
         lambda_1 = 1
@@ -24,24 +30,20 @@ class Data:
         range_1 = lambda a: a <= u_bar*u_bar
 
         # Forsh
-        lambda_2 = 0.1
-        beta_2 = 100 # 10 100 500 1000
+        lambda_2 = 1
+        beta_2 = 1e2 # 10 100 500 1000
         phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
         Phi_2 = lambda a: lambda_2*(a-u_bar*u_bar) + beta_2*(np.power(np.abs(a), 1.5) - np.power(u_bar, 3))*2/3
         range_2 = lambda a: a > u_bar*u_bar
 
-
         phi = [phi_1, phi_2]
         Phi = [Phi_1, Phi_2]
         ranges = [range_1, range_2]
-        self.k_ref = compute_permeability(self.epsilon, self.u_bar/self.u_bar, phi, Phi, ranges, num=num)
+        self.k_ref = compute_permeability(epsilon, u_bar/u_bar, phi, Phi, ranges, num=num)
 
-        #import matplotlib.pyplot as plt
-        #u = np.linspace(0, 2, num)
-        #plt.plot(u, self.k_ref(u))
-        #plt.show()
-
-        self.k = lambda flux2: self.k_ref(flux2/self.u_bar)
+        self.k_adapt = lambda flux2: self.k_ref(flux2/u_bar)
+        self.k_darcy = lambda _: 1/lambda_1
+        self.k_forsh = lambda flux2: phi_2(flux2)
 
     # ------------------------------------------------------------------------------#
 
@@ -54,42 +56,53 @@ class Data:
 
     # ------------------------------------------------------------------------------#
 
-    def perm(self, g, d, flow_solver):
+    def perm(self, sd, d, flow_solver):
         # set a fake permeability for the 0d grids
-        if g.dim == 0:
-            return np.zeros(g.num_cells)
+        if sd.dim == 0:
+            return np.zeros(sd.num_cells)
 
         # cell flux
         flux = d[pp.STATE][flow_solver.P0_flux]
         flux_norm2 = np.square(np.linalg.norm(flux, axis=0))
 
-        return self.k(flux_norm2) * self.spe10.perm[:, 0] * pp.DARCY
+        if self.region is not None:
+            k = np.zeros(sd.num_cells)
+            # region zero is forch, region one is darcy
+            darcy_region = self.region
+            forsh_region = np.logical_not(self.region)
+
+            k[darcy_region] = self.k_darcy(flux_norm2[darcy_region])
+            k[forsh_region] = self.k_forsh(flux_norm2[forsh_region])
+        else:
+            k = self.k_adapt(flux_norm2)
+
+        return k * self.spe10.perm[:, 0] * pp.DARCY
 
     # ------------------------------------------------------------------------------#
 
-    def source(self, g, d, flow_solver):
-        return np.zeros(g.num_cells)
+    def source(self, sd, d, flow_solver):
+        return np.zeros(sd.num_cells)
 
     # ------------------------------------------------------------------------------#
 
-    def vector_source(self, g, d, flow_solver):
+    def vector_source(self, sd, d, flow_solver):
 
-        if g.dim == 0:
-            return np.zeros((g.num_cells, 3))
+        if sd.dim == 0:
+            return np.zeros((sd.num_cells, 3))
 
-        perm = self.perm(g, d, flow_solver)
-        coeff = 0*5e-2 * g.cell_volumes.copy() / perm
+        perm = self.perm(sd, d, flow_solver)
+        coeff = 0 * sd.cell_volumes.copy() / perm
 
         vect = np.vstack(
-                (coeff, np.zeros(g.num_cells), np.zeros(g.num_cells))
+                (coeff, np.zeros(sd.num_cells), np.zeros(sd.num_cells))
                 ).ravel(order="F")
         return vect
 
     # ------------------------------------------------------------------------------#
 
-    def bc(self, g, data, tol, flow_solver):
-        b_faces = g.tags["domain_boundary_faces"].nonzero()[0]
-        b_face_centers = g.face_centers[:, b_faces]
+    def bc(self, sd, data, tol, flow_solver):
+        b_faces = sd.tags["domain_boundary_faces"].nonzero()[0]
+        b_face_centers = sd.face_centers[:, b_faces]
 
         # define outflow type boundary conditions
         out_flow = b_face_centers[1] > self.spe10.full_physdims[1] - tol
@@ -99,7 +112,7 @@ class Data:
 
         # define the labels and values for the boundary faces
         labels = np.array(["neu"] * b_faces.size)
-        bc_val = np.zeros(g.num_faces)
+        bc_val = np.zeros(sd.num_faces)
 
         labels[in_flow] = "dir"
         labels[out_flow] = "dir"
