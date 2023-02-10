@@ -8,8 +8,8 @@ from permeability_convolve import *
 
 class Data:
 
-    def __init__(self, spe10, epsilon=None, u_bar=None, region=None, tol=1e-6, num=100000):
-        self.spe10 = spe10
+    def __init__(self, problem, epsilon=None, u_bar=None, region=None, tol=1e-6, num=100000):
+        self.problem = problem
         self.tol = tol
 
         # it is possible to have or epsilon and u_bar or the region file name
@@ -18,35 +18,28 @@ class Data:
         else:
             self.region = None
 
-        # posso mettere la k adapt e le altre due come casi particolari usando pero' gli stessi dati
-        u_bar = 1
-
-        
-        # Darcy
+        # Darcy: data 1/k_1 and 1/k_2
         lambda_1 = 1
-        beta_1 = 0 *self.u_bar
+        beta_1 = 0
         phi_1 = lambda a: lambda_1 + beta_1*np.sqrt(np.abs(a))
-        pphi_1 = lambda a: lambda_1*a + 2/3*beta_1*np.power(np.abs(a), 1.5) # primitive of phi_1
-        Phi_1 = lambda a: pphi_1(a)
-        range_1 = lambda a: np.logical_and(a >= 0, a <= 1)
-        
-        # Forsh
-        lambda_2 = 1.1
-        beta_2 = 1 *self.u_bar
-        phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
-        pphi_2 = lambda a: lambda_2*a + 2/3*beta_2*np.power(np.abs(a), 1.5) # primitive of phi_2
-        Phi_2 = lambda a: pphi_2(a) + pphi_1(1) - pphi_2(1)
-        range_2 = lambda a: a > 1
+        Phi_1 = lambda a: lambda_1*(a-u_bar*u_bar) + beta_1*(np.power(np.abs(a), 1.5) - np.power(u_bar, 3))*2/3
+        range_1 = lambda a: a <= u_bar*u_bar
 
-        # get permeability
+        # Forsh
+        lambda_2 = 1
+        beta_2 = 1 # 10 100 500 1000
+        phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
+        Phi_2 = lambda a: lambda_2*(a-u_bar*u_bar) + beta_2*(np.power(np.abs(a), 1.5) - np.power(u_bar, 3))*2/3
+        range_2 = lambda a: a > u_bar*u_bar
+
         phi = [phi_1, phi_2]
         Phi = [Phi_1, Phi_2]
         ranges = [range_1, range_2]
-        self.k_ref = compute_permeability(self.epsilon, phi, Phi, ranges)
+        self.k_ref = compute_permeability(epsilon, u_bar, phi, Phi, ranges, num=num)
 
-        self.k_adapt = lambda flux2: self.k_ref(flux2) / self.u_bar
-        self.k_darcy = lambda _: 1/lambda_1 / self.u_bar
-        self.k_forsh = lambda flux2: phi_2(flux2) / self.u_bar
+        self.k_adapt = lambda flux2: self.k_ref(flux2)
+        self.k_darcy = lambda _: 1/lambda_1
+        self.k_forsh = lambda flux2: phi_2(flux2)
 
     # ------------------------------------------------------------------------------#
 
@@ -79,7 +72,7 @@ class Data:
         else:
             k = self.k_adapt(flux_norm2)
 
-        return k * self.spe10.perm[:, 0] * pp.DARCY
+        return k * self.problem.perm[:, 0] #* pp.DARCY
 
     # ------------------------------------------------------------------------------#
 
@@ -108,10 +101,10 @@ class Data:
         b_face_centers = sd.face_centers[:, b_faces]
 
         # define outflow type boundary conditions
-        out_flow = b_face_centers[1] > self.spe10.full_physdims[1] - tol
+        out_flow = b_face_centers[0] > self.problem.full_physdims[1] - tol
 
         # define inflow type boundary conditions
-        in_flow = b_face_centers[1] < 0 + tol
+        in_flow = b_face_centers[0] < 0 + tol
 
         # define the labels and values for the boundary faces
         labels = np.array(["neu"] * b_faces.size)
@@ -120,7 +113,7 @@ class Data:
         labels[in_flow] = "dir"
         labels[out_flow] = "dir"
         bc_val[b_faces[in_flow]] = 0
-        bc_val[b_faces[out_flow]] = 1e7
+        bc_val[b_faces[out_flow]] = 1
 
         return labels, bc_val
 

@@ -4,13 +4,13 @@ import porepy as pp
 
 # ------------------------------------------------------------------------------#
 
-class Spe10(object):
+class Problem(object):
 
 # ------------------------------------------------------------------------------#
 
-    def __init__(self, layers):
-        self.full_shape = (60, 220, 85)
-        self.full_physdims = (365.76, 670.56, 51.816)
+    def __init__(self, layers=1):
+        self.full_shape = (10, 10, 0)
+        self.full_physdims = (1, 1, 0)
 
         self.layers = np.sort(np.atleast_1d(layers))
 
@@ -51,19 +51,21 @@ class Spe10(object):
 
 # ------------------------------------------------------------------------------#
 
-    def read_perm(self, perm_folder):
+    def read_perm(self):
 
         shape = (self.n, self.layers.size)
         perm_xx, perm_yy, perm_zz = np.empty(shape), np.empty(shape), np.empty(shape)
         layers_id = np.empty(shape)
 
         for pos, layer in enumerate(self.layers):
-            perm_file = perm_folder + str(layer) + ".tar.gz"
-            #perm_file = perm_folder + "small_0.csv"
-            perm_layer = np.loadtxt(perm_file, delimiter=",")
-            perm_xx[:, pos] = perm_layer[:, 0]
-            perm_yy[:, pos] = perm_layer[:, 1]
-            perm_zz[:, pos] = perm_layer[:, 2]
+            perm = np.ones(self.n)
+            perm[10:20] = 1e1
+            perm[40:47] = 1e1
+            perm[73:80] = 1e1
+
+            perm_xx[:, pos] = perm.copy()
+            perm_yy[:, pos] = perm.copy()
+            perm_zz[:, pos] = perm.copy()
             layers_id[:, pos] = layer
 
         shape = self.n*self.layers.size
@@ -90,9 +92,9 @@ class Spe10(object):
 
             d[pp.STATE][names[3]] = self.layers_id
 
-            d[pp.STATE][names[4]] = self.perm[:, 0] * pp.DARCY
-            d[pp.STATE][names[5]] = self.perm[:, 1] * pp.DARCY
-            d[pp.STATE][names[6]] = self.perm[:, 2] * pp.DARCY
+            d[pp.STATE][names[4]] = self.perm[:, 0] #* pp.DARCY
+            d[pp.STATE][names[5]] = self.perm[:, 1] #* pp.DARCY
+            d[pp.STATE][names[6]] = self.perm[:, 2] #* pp.DARCY
 
         return names
 
