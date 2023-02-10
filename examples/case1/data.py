@@ -14,34 +14,28 @@ class Data:
         self.spe10 = spe10
         self.tol = tol
 
-        num = 100000
-
-        # Darcy: data 1/k_1 and 1/k_2
+        # Darcy
         lambda_1 = 1
-        beta_1 = 0
+        beta_1 = 0 *self.u_bar
         phi_1 = lambda a: lambda_1 + beta_1*np.sqrt(np.abs(a))
-        Phi_1 = lambda a: lambda_1*(a-u_bar*u_bar) + beta_1*(np.power(np.abs(a), 1.5) - np.power(u_bar, 3))*2/3
-        range_1 = lambda a: a <= u_bar*u_bar
-
+        pphi_1 = lambda a: lambda_1*a + 2/3*beta_1*np.power(np.abs(a), 1.5) # primitive of phi_1
+        Phi_1 = lambda a: pphi_1(a)
+        range_1 = lambda a: np.logical_and(a >= 0, a <= 1)
+        
         # Forsh
-        lambda_2 = 0.1
-        beta_2 = 100 # 10 100 500 1000
+        lambda_2 = 1.1
+        beta_2 = 0 *self.u_bar
         phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
-        Phi_2 = lambda a: lambda_2*(a-u_bar*u_bar) + beta_2*(np.power(np.abs(a), 1.5) - np.power(u_bar, 3))*2/3
-        range_2 = lambda a: a > u_bar*u_bar
+        pphi_2 = lambda a: lambda_2*a + 2/3*beta_2*np.power(np.abs(a), 1.5) # primitive of phi_2
+        Phi_2 = lambda a: pphi_2(a) + pphi_1(1) - pphi_2(1)
+        range_2 = lambda a: a > 1
 
-
+        # get permeability
         phi = [phi_1, phi_2]
         Phi = [Phi_1, Phi_2]
         ranges = [range_1, range_2]
-        self.k_ref = compute_permeability(self.epsilon, self.u_bar/self.u_bar, phi, Phi, ranges, num=num)
-
-        #import matplotlib.pyplot as plt
-        #u = np.linspace(0, 2, num)
-        #plt.plot(u, self.k_ref(u))
-        #plt.show()
-
-        self.k = lambda flux2: self.k_ref(flux2/self.u_bar)
+        self.k_ref = compute_permeability(self.epsilon, phi, Phi, ranges)
+        self.k = lambda flux2: self.k_ref(flux2) / self.u_bar
 
     # ------------------------------------------------------------------------------#
 
