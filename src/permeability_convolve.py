@@ -6,7 +6,7 @@ def compute_permeability(eps, phi, Phi, ranges, return_all=False):
 
     # convolution parameters to choose depending on eps and phi
     a_val = 10 # largest square flux allowed in convolved permeability
-    num = int(2*np.floor(1e5/2)+1) # convolution resolution, always odd to center convolution at 0
+    num = int(2*np.floor(1e6/2)+1) # convolution resolution, always odd to center convolution at 0
 
     # compute inverse permeability from convolution and interpolation
     if return_all:

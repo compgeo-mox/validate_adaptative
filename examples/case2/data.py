@@ -8,7 +8,7 @@ from permeability_convolve import *
 
 class Data:
 
-    def __init__(self, problem, epsilon=None, u_bar=None, region=None, tol=1e-6, num=100000):
+    def __init__(self, problem, epsilon=None, u_bar=None, region=None, tol=1e-6):
         self.problem = problem
         self.tol = tol
 
@@ -17,29 +17,33 @@ class Data:
             self.region = np.loadtxt(region).astype(bool)
         else:
             self.region = None
-
-        # Darcy: data 1/k_1 and 1/k_2
-        lambda_1 = 1
-        beta_1 = 0
+     
+        
+        # Darcy
+        lambda_1 = 2
+        beta_1 = 0 *u_bar
         phi_1 = lambda a: lambda_1 + beta_1*np.sqrt(np.abs(a))
-        Phi_1 = lambda a: lambda_1*(a-u_bar*u_bar) + beta_1*(np.power(np.abs(a), 1.5) - np.power(u_bar, 3))*2/3
-        range_1 = lambda a: a <= u_bar*u_bar
-
+        pphi_1 = lambda a: lambda_1*a + 2/3*beta_1*np.power(np.abs(a), 1.5) # primitive of phi_1
+        Phi_1 = lambda a: pphi_1(a)
+        range_1 = lambda a: np.logical_and(a >= 0, a <= 1)
+        
         # Forsh
-        lambda_2 = 1
-        beta_2 = 1 # 10 100 500 1000
+        lambda_2 = 2
+        beta_2 = 0.25 *u_bar
         phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
-        Phi_2 = lambda a: lambda_2*(a-u_bar*u_bar) + beta_2*(np.power(np.abs(a), 1.5) - np.power(u_bar, 3))*2/3
-        range_2 = lambda a: a > u_bar*u_bar
+        pphi_2 = lambda a: lambda_2*a + 2/3*beta_2*np.power(np.abs(a), 1.5) # primitive of phi_2
+        Phi_2 = lambda a: pphi_2(a) + pphi_1(1) - pphi_2(1)
+        range_2 = lambda a: a > 1
 
+        # get permeability
         phi = [phi_1, phi_2]
         Phi = [Phi_1, Phi_2]
         ranges = [range_1, range_2]
-        self.k_ref = compute_permeability(epsilon, u_bar, phi, Phi, ranges, num=num)
+        self.k_ref = compute_permeability(epsilon, phi, Phi, ranges)
 
-        self.k_adapt = lambda flux2: self.k_ref(flux2)
-        self.k_darcy = lambda _: 1/lambda_1
-        self.k_forsh = lambda flux2: phi_2(flux2)
+        self.k_adapt = lambda flux2: self.k_ref(flux2) / u_bar
+        self.k_darcy = lambda _: 1/lambda_1 / u_bar
+        self.k_forsh = lambda flux2: phi_2(flux2) / u_bar
 
     # ------------------------------------------------------------------------------#
 

@@ -19,7 +19,6 @@ def main(region):
 
     # assign the flag for the low permeable fractures
     epsilon = 1e-4
-
     u_bar = 1e-7/32 # 1 0.5 0.25 0.125 0.0625 0.03125
 
     file_name = "case1"
@@ -55,7 +54,7 @@ def main(region):
 
         A, b = discr.matrix_rhs()
         x = sps.linalg.spsolve(A, b)
-        discr.extract(x, u_bar)
+        discr.extract(x, u_bar=1)
 
         # compute the exit condition
         all_flux = np.empty((3, 0))

@@ -18,14 +18,14 @@ def main(region):
     tol = 1e-10
 
     # assign the flag for the low permeable fractures
-    epsilon = 1e-4
-
-    u_bar = 0.15
-    file_name = "case1"
+    epsilon = 1e-2
+    u_bar = 0.8
+    
+    file_name = "case2"
     folder_name = "./sol/"
     variable_to_export = [Flow.pressure, Flow.P0_flux, Flow.permeability, Flow.P0_flux_norm, Flow.region]
 
-    max_iteration_non_linear = 20
+    max_iteration_non_linear = 40
     max_err_non_linear = 1e-8
 
     # create the grid bucket
@@ -34,7 +34,7 @@ def main(region):
 
     # create the discretization
     discr = Flow(problem.mdg, discr = pp.MVEM)
-    test_data = Data(problem, epsilon, u_bar, region=region)
+    test_data = Data(problem, epsilon=epsilon, u_bar=u_bar, region=region)
 
     for sd, d in problem.mdg.subdomains(return_data=True):
         d.update({pp.STATE: {}})
@@ -54,7 +54,7 @@ def main(region):
 
         A, b = discr.matrix_rhs()
         x = sps.linalg.spsolve(A, b)
-        discr.extract(x, u_bar)
+        discr.extract(x, u_bar=1)
 
         # compute the exit condition
         all_flux = np.empty((3, 0))
