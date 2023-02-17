@@ -18,7 +18,7 @@ def main():
     tol = 1e-10
 
     # assign the flag for the low permeable fractures
-    epsilon = 1e-4
+    epsilon = 1e-1
     u_bar = 1e-7 # 1 0.5 0.25 0.125 0.0625 0.03125
 
     file_name = "case1"

@@ -19,10 +19,17 @@ def main(region):
 
     # assign the flag for the low permeable fractures
     epsilon = 1e-2
-    u_bar = 0.8
-    
+        
     file_name = "case2"
-    folder_name = "./sol/"
+    if region == "region_darcy":
+        folder_name = "./sol/darcy/"
+    elif region == "region_forsh":
+        folder_name = "./sol/forsh/"
+    elif region == None:
+        folder_name = "./sol/adaptative/"
+    elif region == "region":
+        folder_name = "./sol/heterogeneous/"
+                
     variable_to_export = [Flow.pressure, Flow.P0_flux, Flow.permeability, Flow.P0_flux_norm, Flow.region]
 
     max_iteration_non_linear = 40
@@ -34,7 +41,7 @@ def main(region):
 
     # create the discretization
     discr = Flow(problem.mdg, discr = pp.MVEM)
-    test_data = Data(problem, epsilon=epsilon, u_bar=u_bar, region=region)
+    test_data = Data(problem, epsilon=epsilon, region=region)
 
     for sd, d in problem.mdg.subdomains(return_data=True):
         d.update({pp.STATE: {}})
@@ -102,11 +109,11 @@ def main(region):
 if __name__ == "__main__":
     print("Perform the adaptative scheme")
     q_adapt, p_adapt = main(None)
-    #print("Perform the heterogeneous scheme")
-    #q_hete, p_hete = main("region")
-    #print("Perform the darcy-based scheme")
-    #q_darcy, p_darcy = main("region_darcy")
-    #print("Perform the forshheimer-based scheme")
-    #q_forsh, p_forsh = main("region_forsh")
+    # print("Perform the heterogeneous scheme")
+    # q_hete, p_hete = main("region")
+    print("Perform the darcy-based scheme")
+    q_darcy, p_darcy = main("region_darcy")
+    print("Perform the forshheimer-based scheme")
+    q_forsh, p_forsh = main("region_forsh")
 
     #import pdb; pdb.set_trace()

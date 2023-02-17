@@ -18,8 +18,8 @@ def main(region):
     tol = 1e-10
 
     # assign the flag for the low permeable fractures
-    epsilon = 1e-4
-    u_bar = 1e-7/32 # 1 0.5 0.25 0.125 0.0625 0.03125
+    epsilon = 1e-2
+    u_bar = 1e-7 # 1 0.5 0.25 0.125 0.0625 0.03125
 
     file_name = "case1"
     folder_name = "./fixed/"
@@ -102,11 +102,11 @@ def main(region):
 if __name__ == "__main__":
     print("Perform the adaptative scheme")
     q_adapt, p_adapt = main(None)
-    print("Perform the heterogeneous scheme")
-    q_hete, p_hete = main("region")
-    print("Perform the darcy-based scheme")
-    q_darcy, p_darcy = main("region_darcy")
-    print("Perform the forshheimer-based scheme")
-    q_forsh, p_forsh = main("region_forsh")
+    # print("Perform the heterogeneous scheme")
+    # q_hete, p_hete = main("region")
+    # print("Perform the darcy-based scheme")
+    # q_darcy, p_darcy = main("region_darcy")
+    # print("Perform the forshheimer-based scheme")
+    # q_forsh, p_forsh = main("region_forsh")
 
     import pdb; pdb.set_trace()

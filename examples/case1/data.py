@@ -20,11 +20,15 @@ class Data:
 
         # posso mettere la k adapt e le altre due come casi particolari usando pero' gli stessi dati
         u_bar = 1e-7
-        epsilon = 1e-1
+        epsilon = 1e-2
 
+        mu = 0.001 # fluid's viscosity [Pa.s]
+        rho = 1000. # fluid's density [kg/m3]
+        cf = 0.55 # Forchheimer coefficient [-]
+        K = 8e3 # characteristic permeability [m2]
         
         # Darcy
-        lambda_1 = 1
+        lambda_1 = mu
         beta_1 = 0 *u_bar
         phi_1 = lambda a: lambda_1 + beta_1*np.sqrt(np.abs(a))
         pphi_1 = lambda a: lambda_1*a + 2/3*beta_1*np.power(np.abs(a), 1.5) # primitive of phi_1
@@ -32,8 +36,8 @@ class Data:
         range_1 = lambda a: np.logical_and(a >= 0, a <= 1)
         
         # Forsh
-        lambda_2 = 1
-        beta_2 = 1e6 *u_bar
+        lambda_2 = mu
+        beta_2 = cf*rho*np.sqrt(K) *u_bar
         phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
         pphi_2 = lambda a: lambda_2*a + 2/3*beta_2*np.power(np.abs(a), 1.5) # primitive of phi_2
         Phi_2 = lambda a: pphi_2(a) + pphi_1(1) - pphi_2(1)
@@ -47,7 +51,7 @@ class Data:
 
         self.k_adapt = lambda flux2: self.k_ref(flux2) / u_bar
         self.k_darcy = lambda _: 1/lambda_1 / u_bar
-        self.k_forsh = lambda flux2: phi_2(flux2) / u_bar
+        self.k_forsh = lambda flux2: 1/phi_2(flux2) / u_bar
 
     # ------------------------------------------------------------------------------#
 
@@ -121,7 +125,7 @@ class Data:
         labels[in_flow] = "dir"
         labels[out_flow] = "dir"
         bc_val[b_faces[in_flow]] = 0
-        bc_val[b_faces[out_flow]] = 1e7
+        bc_val[b_faces[out_flow]] = 7e7
 
         return labels, bc_val
 
