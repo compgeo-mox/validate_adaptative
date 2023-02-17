@@ -58,10 +58,10 @@ class Problem(object):
         layers_id = np.empty(shape)
 
         for pos, layer in enumerate(self.layers):
-            perm = np.ones(self.n)
-            perm[10:20] = 1e1
-            perm[40:47] = 1e1
-            perm[73:80] = 1e1
+            perm = 0.001*np.ones(self.n)
+            perm[10:19] = 1e3
+            perm[40:47] = 1e3
+            perm[73:80] = 1e3
 
             perm_xx[:, pos] = perm.copy()
             perm_yy[:, pos] = perm.copy()
