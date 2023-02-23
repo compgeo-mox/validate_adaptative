@@ -1,11 +1,12 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy import signal
 from scipy import interpolate
 
 def compute_permeability(eps, phi, Phi, ranges, return_all=False):
 
     # convolution parameters to choose depending on eps and phi
-    a_val = 10 # largest square flux allowed in convolved permeability
+    a_val = 20 # largest square flux allowed in convolved permeability
     num = int(2*np.floor(1e6/2)+1) # convolution resolution, always odd to center convolution at 0
 
     # compute inverse permeability from convolution and interpolation
@@ -44,13 +45,14 @@ def do_convolution(eps, phi, Phi, ranges, a_val, num, return_all):
     # interpolate the convolution to get function defined from b=0 to b=a_val 
     idx0 = int(0.5*(num+1)-1) # index such that b[idx0] = 0
     I_K_inv = interpolate.interp1d(b[idx0:]/2, conv[idx0:], kind="cubic")
-
+    
     # check I_K_inv and Psi match on plot
     psi = lambda b: np.sum([p(b) * r(b) for p, r in zip(phi, ranges)], axis=0)
-    #I_K_inv = psi
+    # I_K_inv = psi
     b_new = b[idx0:]/2
-    import matplotlib.pyplot as plt
+    fig1 = plt.figure(1)
     plt.xlim([0, 2])
+    plt.ylim([psi(0)-1.e-6, psi(2)+1.e-6])
     plt.plot(b_new, I_K_inv(b_new))
     plt.plot(b_new, psi(b_new))
     plt.savefig('inv_perm.png')

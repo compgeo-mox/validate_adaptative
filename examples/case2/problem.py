@@ -9,7 +9,7 @@ class Problem(object):
 # ------------------------------------------------------------------------------#
 
     def __init__(self, layers=1):
-        self.full_shape = (10, 10, 0)
+        self.full_shape = (20, 20, 0)
         self.full_physdims = (1, 1, 0)
 
         self.layers = np.sort(np.atleast_1d(layers))
@@ -58,10 +58,11 @@ class Problem(object):
         layers_id = np.empty(shape)
 
         for pos, layer in enumerate(self.layers):
-            perm = 0.001*np.ones(self.n)
-            perm[10:19] = 1e3
-            perm[40:47] = 1e3
-            perm[73:80] = 1e3
+            perm = 1.01e-9*np.ones(self.n)
+            perm[60:69] = 7.3e-7
+            perm[147:153] = 2.3e-6
+            perm[283:298] = 2.3e-6
+            perm[111:341:20] = 2.3e-6
 
             perm_xx[:, pos] = perm.copy()
             perm_yy[:, pos] = perm.copy()
@@ -92,9 +93,9 @@ class Problem(object):
 
             d[pp.STATE][names[3]] = self.layers_id
 
-            d[pp.STATE][names[4]] = self.perm[:, 0] #* pp.DARCY
-            d[pp.STATE][names[5]] = self.perm[:, 1] #* pp.DARCY
-            d[pp.STATE][names[6]] = self.perm[:, 2] #* pp.DARCY
+            d[pp.STATE][names[4]] = self.perm[:, 0] 
+            d[pp.STATE][names[5]] = self.perm[:, 1] 
+            d[pp.STATE][names[6]] = self.perm[:, 2] 
 
         return names
 

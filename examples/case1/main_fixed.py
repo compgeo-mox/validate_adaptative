@@ -100,12 +100,12 @@ def main(region):
 # DA FARE RITORNARE I VALORI PRESSIONE E FLUSSO IN MODO DA CONFRONTARLI
 
 if __name__ == "__main__":
-    print("Perform the adaptative scheme")
-    q_adapt, p_adapt = main(None)
+    # print("Perform the adaptative scheme")
+    # q_adapt, p_adapt = main(None)
     # print("Perform the heterogeneous scheme")
     # q_hete, p_hete = main("region")
-    # print("Perform the darcy-based scheme")
-    # q_darcy, p_darcy = main("region_darcy")
+    print("Perform the darcy-based scheme")
+    q_darcy, p_darcy = main("region_darcy")
     # print("Perform the forshheimer-based scheme")
     # q_forsh, p_forsh = main("region_forsh")
 

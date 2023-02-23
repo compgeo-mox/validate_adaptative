@@ -19,13 +19,26 @@ class Data:
             self.region = None
      
         mu = 0.001 # fluid's viscosity [Pa.s]
-        rho = 1000. # fluid's density [kg/m3]
+        rho = 998. # fluid's density [kg/m3]
         cF = 0.55 # Forchheimer coefficient [-]
-        K = 1e3 # characteristic permeability [m2]
+        #K = 1e-6 # characteristic permeability [m2]
         E = 0.1 # maximum error to Forchheimer accepted [-]
         Fo_c = E/(1-E) # critical Forchheimer number [-]
+
+        # Kozeny-Carman
+        K_ref, phi_ref = 1.01e-9, 0.35
+        phi = 0.94
+        K = K_ref * np.square(1-phi_ref)/np.power(phi_ref,3) * np.power(phi,3)/np.square(1-phi)
+        print("K =", K)
+
+        # Leverett
+        # p_ref = 1.e3
+        # phi_bdry = phi_ref
+        # K_bdry = K_ref
+        # p_bdry = p_ref* np.sqrt(phi_bdry*K_ref/(phi_ref*K_bdry))
+        # print("p_bdry =", p_bdry)
         
-        u_bar = mu/(cF*rho*np.sqrt(K)) * Fo_c
+        u_bar = mu/(cF*rho*np.sqrt(K)) * Fo_c 
         print("u_bar =", u_bar)
 
         self.space_dependent_law = False
@@ -51,7 +64,10 @@ class Data:
             phi = [phi_1, phi_2]
             Phi = [Phi_1, Phi_2]
             ranges = [range_1, range_2]
-            k_ref = compute_permeability(epsilon, phi, Phi, ranges)
+            if self.region is None:
+                k_ref = compute_permeability(epsilon, phi, Phi, ranges)
+            else:
+                k_ref = lambda _: 0
 
             self.k_adapt = lambda flux2: k_ref(flux2) / u_bar
             self.k_darcy = lambda _: 1/lambda_1 / u_bar
@@ -86,11 +102,14 @@ class Data:
                 phi = [phi_1, phi_2]
                 Phi = [Phi_1, Phi_2]
                 ranges = [range_1, range_2]
-                k_ref = compute_permeability(epsilon, phi, Phi, ranges)
+                if self.region is None:
+                    k_ref = compute_permeability(epsilon, phi, Phi, ranges)
+                else:
+                    k_ref = lambda _: 0
 
                 self.k_adapt.append(lambda flux2: k_ref(flux2) / u_bar)
                 self.k_darcy.append(lambda _: 1/lambda_1 / u_bar)
-                self.k_forsh.append(lambda flux2: phi_2(flux2) / u_bar)
+                self.k_forsh.append(lambda flux2: 1/phi_2(flux2) / u_bar)
 
     # ------------------------------------------------------------------------------#
 
@@ -139,7 +158,7 @@ class Data:
                 for i in range(sd.num_cells):
                     k[i] = self.k_adapt[i](flux_norm2[i])
 
-        return k * self.problem.perm[:, 0] #* pp.DARCY
+        return k * self.problem.perm[:, 0]
 
     # ------------------------------------------------------------------------------#
 
@@ -154,7 +173,9 @@ class Data:
             return np.zeros((sd.num_cells, 3))
 
         perm = self.perm(sd, d, flow_solver)
-        coeff = 0 * sd.cell_volumes.copy() / perm
+        rho = 998
+        g = 9.81
+        coeff = 0 * sd.cell_volumes.copy() / perm + rho*g*self.problem.perm[:, 0]
 
         vect = np.vstack(
                 (coeff, np.zeros(sd.num_cells), np.zeros(sd.num_cells))
@@ -179,8 +200,10 @@ class Data:
 
         labels[in_flow] = "dir"
         labels[out_flow] = "dir"
-        bc_val[b_faces[in_flow]] = 0
-        bc_val[b_faces[out_flow]] = 0.5e-9
+        rho = 998
+        g = 9.81
+        bc_val[b_faces[in_flow]] = 0.5
+        bc_val[b_faces[out_flow]] = 0. 
 
         return labels, bc_val
 
