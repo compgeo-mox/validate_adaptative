@@ -115,8 +115,8 @@ if __name__ == "__main__":
     q_forsh, p_forsh, _ = main("region_forsh")
 
     region = np.loadtxt("region").astype(bool)
-    p_ref = p_adapt
-    q_ref = q_adapt
+    p_ref = p_forsh
+    q_ref = q_forsh
 
     for reg in np.unique(region):
         pos = region == reg

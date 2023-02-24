@@ -1,0 +1,20 @@
+Alessio:
+- esportare il gradiente della pressione
+- esportare la permeabilita' effettiva
+- generare permeabilita' per il caso test 3
+- introdurre due pozzi nel caso spe10
+
+Francesco:
+- controllare la coerenza dei dati fisici per il case2
+- convoluzione "cella per cella"
+- esportare il numero di Forchheimer o la beta
+
+caso test 1
+- il case2 2d e 3d
+
+caso test 2
+- spe10 3d con qualche strato
+- pozzi
+
+caso test 3
+- caso bernd 2d
