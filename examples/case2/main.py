@@ -18,8 +18,8 @@ def main(region):
     tol = 1e-10
 
     # assign the flag for the low permeable fractures
-    epsilon = 1.e-2
-        
+    epsilon = 1e-2
+    
     file_name = "case2"
     if region == None:
         folder_name = "./sol/adaptative/"
@@ -100,20 +100,62 @@ def main(region):
         flux = d[pp.STATE][Flow.P0_flux]
         pressure = d[pp.STATE][Flow.pressure]
 
-    return flux, pressure
+    return flux, pressure, problem.mdg
 
 # ------------------------------------------------------------------------------#
 
-# DA FARE RITORNARE I VALORI PRESSIONE E FLUSSO IN MODO DA CONFRONTARLI
-
 if __name__ == "__main__":
     print("Perform the adaptative scheme")
-    q_adapt, p_adapt = main(None)
-    # print("Perform the heterogeneous scheme")
-    # q_hete, p_hete = main("region")
+    q_adapt, p_adapt, mdg = main(None)
+    print("Perform the heterogeneous scheme")
+    q_hete, p_hete, _ = main("region")
     print("Perform the darcy-based scheme")
-    q_darcy, p_darcy = main("region_darcy")
+    q_darcy, p_darcy, _ = main("region_darcy")
     print("Perform the forshheimer-based scheme")
-    q_forsh, p_forsh = main("region_forsh")
+    q_forsh, p_forsh, _ = main("region_forsh")
 
-    #import pdb; pdb.set_trace()
+    region = np.loadtxt("region").astype(bool)
+    p_ref = p_adapt
+    q_ref = q_adapt
+
+    for reg in np.unique(region):
+        pos = region == reg
+        # mass matrix
+        mass = sps.diags([sd.cell_volumes[pos] for sd in mdg.subdomains()], [0])
+
+        norm_scalar = lambda x: np.sqrt(x @ mass @ x)
+        norm_vector = lambda x: np.sqrt(np.linalg.norm(x, axis=0) @ mass @ np.linalg.norm(x, axis=0))
+
+        # we assume to be the adaptative solution as the reference
+        norm_p_ref = norm_scalar(p_ref[pos])
+        norm_q_ref = norm_vector(q_ref[:, pos])
+
+        # let's compute the errors
+        err_p_hete = norm_scalar(p_ref[pos] - p_hete[pos]) / norm_p_ref
+        err_q_hete = norm_vector(q_ref[:, pos] - q_hete[:, pos]) / norm_q_ref
+
+        err_p_darcy = norm_scalar(p_ref[pos] - p_darcy[pos]) / norm_p_ref
+        err_q_darcy = norm_vector(q_ref[:, pos] - q_darcy[:, pos]) / norm_q_ref
+
+        err_p_forsh = norm_scalar(p_ref[pos] - p_forsh[pos]) / norm_p_ref
+        err_q_forsh = norm_vector(q_ref[:, pos] - q_forsh[:, pos]) / norm_q_ref
+
+        print("Region", {True: "darcy", False: "forsh"}[reg])
+        print("------")
+
+        print("Errors for case hete:")
+        print("pressure", err_p_hete)
+        print("flux", err_q_hete)
+        print("------")
+
+        print("Errors for case darcy:")
+        print("pressure", err_p_darcy)
+        print("flux", err_q_darcy)
+        print("------")
+
+        print("Errors for case forsh:")
+        print("pressure", err_p_forsh)
+        print("flux", err_q_forsh)
+        print("------")
+
+    import pdb; pdb.set_trace()
