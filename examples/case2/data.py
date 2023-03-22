@@ -17,55 +17,56 @@ class Data:
             self.region = np.loadtxt(region).astype(bool)
         else:
             self.region = None
-     
+
+        # physical parameters
         mu = 0.001 # fluid's viscosity [Pa.s]
         rho = 998. # fluid's density [kg/m3]
         cF = 0.55 # Forchheimer coefficient [-]
-        #K = 1e-6 # characteristic permeability [m2]
+
+        # determining threshold speed
         E = 0.1 # maximum error to Forchheimer accepted [-]
         Fo_c = E/(1-E) # critical Forchheimer number [-]
+        K_ref, phi_ref = 1.01e-9, 0.35 # reference permeability [m2] and porosity [-]
+        phi_max = 0.94 # max porosity in channels [-]
+        K = K_ref * np.square(1-phi_ref)/np.power(phi_ref,3) \
+            * np.power(phi_max,3)/np.square(1-phi_max) # Kozeny-Carman permeability [m2]
+        u_bar = mu/(cF*rho*np.sqrt(K)) * Fo_c # threshold speed [m/s]
+        print("Fo_c =", Fo_c, " K =", K, " u_bar =", u_bar)
 
-        # Kozeny-Carman
-        K_ref, phi_ref = 1.01e-9, 0.35
-        phi = 0.94
-        K = K_ref * np.square(1-phi_ref)/np.power(phi_ref,3) * np.power(phi,3)/np.square(1-phi)
-        print("K =", K)
+        # drag coefficients in region laws
+        lambda_1 = mu # order 1 in region 1
+        beta_1 = 0 *u_bar # order 2 in region 1
+        lambda_2 = mu # order 1 in region 2
+        beta_2 = cF*rho *u_bar # order 2 in region 2
 
-        # Leverett
-        # p_ref = 1.e3
-        # phi_bdry = phi_ref
-        # K_bdry = K_ref
-        # p_bdry = p_ref* np.sqrt(phi_bdry*K_ref/(phi_ref*K_bdry))
-        # print("p_bdry =", p_bdry)
-        
-        u_bar = mu/(cF*rho*np.sqrt(K)) * Fo_c 
-        print("u_bar =", u_bar)
+        # ranges to define regions (normalized by u_bar)
+        range_1 = lambda a: np.logical_and(a >= 0, a <= 1) # slow-speed region (Darcy)
+        range_2 = lambda a: a > 1 # high-speed region (Forchheimer)
+        ranges = [range_1, range_2]
 
         self.space_dependent_law = False
 
         if self.space_dependent_law is False:
+            beta_1 *= np.sqrt(K)
+            beta_2 *= np.sqrt(K)
+            
             # Darcy
-            lambda_1 = mu
-            beta_1 = 0 *u_bar
             phi_1 = lambda a: lambda_1 + beta_1*np.sqrt(np.abs(a))
             pphi_1 = lambda a: lambda_1*a + 2/3*beta_1*np.power(np.abs(a), 1.5) # primitive of phi_1
             Phi_1 = lambda a: pphi_1(a)
-            range_1 = lambda a: np.logical_and(a >= 0, a <= 1)
-            
+                        
             # Forsh
             lambda_2 = mu
             beta_2 = cF*rho*np.sqrt(K) *u_bar
             phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
             pphi_2 = lambda a: lambda_2*a + 2/3*beta_2*np.power(np.abs(a), 1.5) # primitive of phi_2
             Phi_2 = lambda a: pphi_2(a) + pphi_1(1) - pphi_2(1)
-            range_2 = lambda a: a > 1
-
+        
             # get permeability
             phi = [phi_1, phi_2]
             Phi = [Phi_1, Phi_2]
-            ranges = [range_1, range_2]
             if self.region is None:
-                k_ref = compute_permeability(epsilon, phi, Phi, ranges)
+                k_ref = compute_permeability(epsilon, ranges, phi=phi, Phi=Phi)
             else:
                 k_ref = lambda _: 0
 
@@ -74,39 +75,26 @@ class Data:
             self.k_forsh = lambda flux2: 1/phi_2(flux2) / u_bar
 
         else:
+            # bg_K = self.problem.perm[i,0] # background permeability
+            
+            beta_1 *= np.sqrt(K)
+            beta_2 *= np.sqrt(K)
+
             self.k_adapt = []
             self.k_darcy = []
             self.k_forsh = []
+
+            coeffs_1 = [lambda_1, beta_1]
+            coeffs_2 = [lambda_2, beta_2]
+            coeffs = [coeffs_1, coeffs_2]
+            phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
+            if self.region is None:
+                k_ref = compute_permeability(epsilon, ranges, coeffs=coeffs)
+            else:
+                k_ref = lambda _: 0
+     
             for i in range(self.problem.perm[:, 0].size):
                 print("cell =", i)
-                
-                bg_perm = self.problem.perm[i,0] # background permeability
-            
-                # Darcy
-                lambda_1 = mu
-                beta_1 = 0 *u_bar
-                phi_1 = lambda a: lambda_1 + beta_1*np.sqrt(np.abs(a))
-                pphi_1 = lambda a: lambda_1*a + 2/3*beta_1*np.power(np.abs(a), 1.5) # primitive of phi_1
-                Phi_1 = lambda a: pphi_1(a)
-                range_1 = lambda a: np.logical_and(a >= 0, a <= 1)
-            
-                # Forsh
-                lambda_2 = mu
-                beta_2 = cF*rho*np.sqrt(bg_perm) *u_bar
-                phi_2 = lambda a: lambda_2 + beta_2*np.sqrt(np.abs(a))
-                pphi_2 = lambda a: lambda_2*a + 2/3*beta_2*np.power(np.abs(a), 1.5) # primitive of phi_2
-                Phi_2 = lambda a: pphi_2(a) + pphi_1(1) - pphi_2(1)
-                range_2 = lambda a: a > 1
-
-                # get permeability
-                phi = [phi_1, phi_2]
-                Phi = [Phi_1, Phi_2]
-                ranges = [range_1, range_2]
-                if self.region is None:
-                    k_ref = compute_permeability(epsilon, phi, Phi, ranges)
-                else:
-                    k_ref = lambda _: 0
-
                 self.k_adapt.append(lambda flux2: k_ref(flux2) / u_bar)
                 self.k_darcy.append(lambda _: 1/lambda_1 / u_bar)
                 self.k_forsh.append(lambda flux2: 1/phi_2(flux2) / u_bar)
