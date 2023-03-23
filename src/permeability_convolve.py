@@ -50,9 +50,10 @@ def prepare_convolution(ranges, phi=None, Phi=None, coeffs=None):
     else:
         highest_order = len(coeffs[0])
         num_regions = len(ranges)-1
+        num_cells = len(coeffs[0][0])
 
         # add coefficients of order 0 (constants)
-        coeffs_cst = 0
+        coeffs_cst = np.zeros(num_cells)
         coeffs[0] = [coeffs_cst] + coeffs[0]
         for i in range(num_regions-1):
             coeffs_cst = 2*np.sum(1/(j+2) * (coeffs[i][j+1] - coeffs[i+1][j]) \
@@ -61,7 +62,7 @@ def prepare_convolution(ranges, phi=None, Phi=None, coeffs=None):
             coeffs[i+1] = [coeffs_cst] + coeffs[i+1]
             
         # add coefficients of negative-speed region (region 0)
-        coeffs_0 = [0 for j in range(highest_order+1)]
+        coeffs_0 = [np.zeros(num_cells) for j in range(highest_order+1)]
         coeffs_0[0] = coeffs[0][0]
         coeffs_0[1] = coeffs[0][1]
         coeffs = [coeffs_0] + coeffs
@@ -122,18 +123,34 @@ def do_convolution(eps, a_val, num, return_all, \
             return I_K_inv, b
 
     else:
-        # compute the convolution
         highest_order = len(coeffs[0])-1
         num_regions = len(coeffs)-1
+        num_cells = len(coeffs[0][0])
 
-        conv = np.zeros(num)
+        # compute the convolution and interpolation simultaneously
+        I_conv_reg = []
         for i in range(num_regions+1):
-            conv_temp = [signal.convolve(2*G_prime(b), powers[i][j](b2), mode="same")*dx \
-                         for j in range(highest_order+1)]
-            conv += np.sum(coeffs[i][j]*conv_temp[j] for j in range(highest_order+1))
+            conv_pow_i = [signal.convolve(2*G_prime(b), powers[i][j](b2), mode="same")*dx \
+                          for j in range(highest_order+1)]
+            I_pow_i = [interpolate.interp1d(b[idx0:]/2, conv_pow_i[j][idx0:], kind="cubic") \
+                       for j in range(highest_order+1)]
+            I_conv_i = []
+            for k in range(num_cells):
+                I_conv_i = I_conv_i + [add_fcts([multiply_fct(coeffs[i][j][k],I_pow_i[j]) \
+                                                 for j in range(highest_order+1)])]
+            I_conv_reg = I_conv_reg + [I_conv_i]
 
-        # interpolate the convolution to get function defined from b=0 to b=a_val 
-        I_K_inv = interpolate.interp1d(b[idx0:]/2, conv[idx0:], kind="cubic")
+        I_K_inv = []
+        for k in range(num_cells):
+            I_K_inv = I_K_inv + [add_fcts([I_conv_reg[i][k] for i in range(num_regions+1)])]
+            # for k in range(num_cells):
+            #     conv[k,:] += np.sum(coeffs[i][j][k]*conv_temp[j] for j in range(highest_order+1))
+
+        # interpolate the convolution to get function defined from b=0 to b=a_val
+        # I_K_inv = []
+        # for k in range(num_cells):
+        #     print(k)
+        #     I_K_inv = I_K_inv + [interpolate.interp1d(b[idx0:]/2, conv[k,idx0:], kind="cubic")]
     
         if return_all:
             return I_K_inv, b, G_prime
@@ -143,16 +160,33 @@ def do_convolution(eps, a_val, num, return_all, \
 def K_fct(I_K_inv, a, a_val):
 
     a = np.atleast_1d(a)
-
-    # conditions
-    less = a < 0 # will not happen since a = flux^2 >= 0
-    more = a > a_val
-    between = np.logical_and(a >= 0, a <= a_val)
-
-    # K
     K = np.zeros(a.size)
-    K[less] = 1. / I_K_inv(0)
-    K[more] = 1. / I_K_inv(a_val)
-    K[between] = 1. / I_K_inv(a[between])
+        
+    if isinstance(I_K_inv,float):
+        # conditions
+        less = a < 0 # will not happen since a = flux^2 >= 0
+        more = a > a_val
+        between = np.logical_and(a >= 0, a <= a_val)
+    
+        # K
+        K[less] = 1. / I_K_inv(0)
+        K[more] = 1. / I_K_inv(a_val)
+        K[between] = 1. / I_K_inv(a[between])
+
+    else:
+        # K
+        for k in range(a.size):
+            if a[k] < 0:
+                K[k] = 1. / I_K_inv[k](0)
+            elif a[k] > a_val:
+                K[k] = 1. / I_K_inv[k](a_val)
+            else:
+                K[k] = 1. / I_K_inv[k](a[k])
 
     return K
+
+def multiply_fct(scalar, fct):
+    return lambda x: scalar*fct(x)
+
+def add_fcts(fcts):
+    return lambda x: np.sum(fcts[i](x) for i in range(len(fcts)))

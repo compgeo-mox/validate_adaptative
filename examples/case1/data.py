@@ -47,7 +47,7 @@ class Data:
         phi = [phi_1, phi_2]
         Phi = [Phi_1, Phi_2]
         ranges = [range_1, range_2]
-        self.k_ref = compute_permeability(epsilon, phi, Phi, ranges)
+        self.k_ref = compute_permeability(epsilon, ranges, phi=phi, Phi=Phi)
 
         self.k_adapt = lambda flux2: self.k_ref(flux2) / u_bar
         self.k_darcy = lambda _: 1/lambda_1 / u_bar
