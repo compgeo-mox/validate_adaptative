@@ -118,8 +118,6 @@ class Data:
         # cell flux
         flux = d[pp.STATE][flow_solver.P0_flux]
         flux_norm2 = np.square(np.linalg.norm(flux, axis=0))
-        # bg_K = self.problem.perm[:, 0]
-        # flux_perm_norm2 = bg_K*flux*flux
 
         if self.region is not None:
             k = np.zeros(sd.num_cells)

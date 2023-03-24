@@ -19,6 +19,8 @@ def compute_permeability(eps, ranges, phi=None, Phi=None, coeffs=None, return_al
             I_K_inv, a = do_convolution(eps, a_val, num, return_all, \
                                         ranges=ranges, phi=phi, Phi=Phi)           
 
+        # create a lambda function to be actual permeability
+        K = lambda a: K_fct(I_K_inv, a, a_val, False)
     else:
         coeffs, powers = prepare_convolution(ranges, coeffs=coeffs)
         if return_all:
@@ -27,8 +29,8 @@ def compute_permeability(eps, ranges, phi=None, Phi=None, coeffs=None, return_al
         else:
             I_K_inv, a = do_convolution(eps, a_val, num, return_all, coeffs=coeffs, powers=powers)
         
-    # create a lambda function to be actual permeability
-    K = lambda a: K_fct(I_K_inv, a, a_val)
+        # create a lambda function to be actual permeability
+        K = lambda a: K_fct(I_K_inv, a, a_val, True)
 
     if return_all:
         return K, G_prime, Psi
@@ -143,26 +145,18 @@ def do_convolution(eps, a_val, num, return_all, \
         I_K_inv = []
         for k in range(num_cells):
             I_K_inv = I_K_inv + [add_fcts([I_conv_reg[i][k] for i in range(num_regions+1)])]
-            # for k in range(num_cells):
-            #     conv[k,:] += np.sum(coeffs[i][j][k]*conv_temp[j] for j in range(highest_order+1))
-
-        # interpolate the convolution to get function defined from b=0 to b=a_val
-        # I_K_inv = []
-        # for k in range(num_cells):
-        #     print(k)
-        #     I_K_inv = I_K_inv + [interpolate.interp1d(b[idx0:]/2, conv[k,idx0:], kind="cubic")]
     
         if return_all:
             return I_K_inv, b, G_prime
         else:
             return I_K_inv, b
 
-def K_fct(I_K_inv, a, a_val):
+def K_fct(I_K_inv, a, a_val, space_dependent_law):
 
     a = np.atleast_1d(a)
     K = np.zeros(a.size)
         
-    if isinstance(I_K_inv,float):
+    if not space_dependent_law:
         # conditions
         less = a < 0 # will not happen since a = flux^2 >= 0
         more = a > a_val
