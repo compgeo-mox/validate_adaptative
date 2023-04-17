@@ -1,6 +1,8 @@
 import numpy as np
 import porepy as pp
 
+from well_coupling import WellCoupling
+
 class Flow(object):
 
     # post process variables
@@ -10,6 +12,7 @@ class Flow(object):
     P0_flux_norm = "P0_darcy_flux_norm"
     region = "region"
     permeability = "permeability"
+    gradient_pressure = "gradient_pressure"
 
     # ------------------------------------------------------------------------------#
 
@@ -48,15 +51,22 @@ class Flow(object):
 
             d["deviation_from_plane_tol"] = 1e-8
             d["is_tangential"] = True
+            d["ambient_dimension"] = self.mdg.dim_max(),
 
             # assign permeability
             k = data["k"](sd, d, self)
 
             # no source term is assumed by the user
-            if sd.dim == 1:
+            if sd.dim == 1 and sd.well_num == -1:
                 param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=1, kzz=1)
             elif sd.dim == 2:
                 param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=k, kzz=1)
+            elif sd.dim == 3:
+                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=k, kzz=k)
+            elif sd.dim == 1 and sd.well_num > -1:
+                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=1, kzz=1)
+                param["well_radius"] = data["well_radius"]
+
             param["source"] = data["source"](sd, d, self)
             param["vector_source"] = data["vector_source"](sd, d, self)
 
@@ -71,35 +81,45 @@ class Flow(object):
 
             pp.initialize_data(sd, d, self.model, param)
 
+        for intf, data in self.mdg.interfaces(return_data=True):
+            _, sd_secondary =  self.mdg.interface_to_subdomain_pair(intf)
+
+            if sd_secondary.dim == 1 and sd_secondary.well_num > -1:
+                param = {"skin_factor": np.zeros(intf.num_cells)}
+
+            pp.initialize_data(intf, data, self.model, param)
+
     # ------------------------------------------------------------------------------#
 
     def matrix_rhs(self):
 
+        discr = self.discr(self.model)
+        source = self.source(self.model)
+
         # set the discretization for the grids
         for sd, d in self.mdg.subdomains(return_data=True):
-            discr = self.discr(self.model)
-            source = self.source(self.model)
-
             d[pp.PRIMARY_VARIABLES] = {self.variable: {"cells": 1, "faces": 1}}
             d[pp.DISCRETIZATION] = {self.variable: {self.discr_name: discr,
                                                     self.source_name: source}}
             d[pp.DISCRETIZATION_MATRICES] = {self.model: {}}
 
         # define the interface terms to couple the grids
-        for e, d in self.mdg.interfaces(return_data=True):
-            gl, gh = mdg.interface_to_subdomain_pair(e)
+        coupling_well = WellCoupling(self.model, discr, discr)
 
-            # retrive the discretization of the master and slave grids
-            discr_master = self.mdg.node_props(gh, pp.DISCRETIZATION)[self.variable][self.discr_name]
-            discr_slave = self.mdg.node_props(gl, pp.DISCRETIZATION)[self.variable][self.discr_name]
-            coupling = self.coupling(self.model, discr_master, discr_slave)
+        for intf, data in self.mdg.interfaces(return_data=True):
+            sd_primary, sd_secondary = self.mdg.interface_to_subdomain_pair(intf)
+            data[pp.PRIMARY_VARIABLES] = {self.mortar: {"cells": 1}}
 
-            d[pp.PRIMARY_VARIABLES] = {self.mortar: {"cells": 1}}
-            d[pp.COUPLING_DISCRETIZATION] = {
+            if sd_secondary.dim == 1 and sd_secondary.well_num > -1:
+                coupling = coupling_well
+            else:
+                raise ValueError
+
+            data[pp.COUPLING_DISCRETIZATION] = {
                 self.coupling_name: {
-                    gl: (self.variable, self.discr_name),
-                    gh: (self.variable, self.discr_name),
-                    e: (self.mortar, coupling),
+                    sd_secondary: (self.variable, self.discr_name),
+                    sd_primary: (self.variable, self.discr_name),
+                    intf: (self.mortar, coupling),
                 }
             }
             d[pp.DISCRETIZATION_MATRICES] = {self.model: {}}
@@ -119,7 +139,9 @@ class Flow(object):
             var = d[pp.STATE][self.variable]
             d[pp.STATE][self.pressure] = discr.extract_pressure(sd, var, d)
             d[pp.STATE][self.flux] = discr.extract_flux(sd, var, d)
-            d[pp.STATE][self.permeability] = np.log10(d[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0])
+
+            perm = d[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
+            d[pp.STATE][self.permeability] = perm
 
             if "original_id" in sd.tags:
                 d[pp.STATE]["original_id"] = sd.tags["original_id"] * np.ones(sd.num_cells)
@@ -132,6 +154,10 @@ class Flow(object):
         for _, d in self.mdg.subdomains(return_data=True):
             norm = np.linalg.norm(d[pp.STATE][self.P0_flux], axis=0)
             d[pp.STATE][self.P0_flux_norm] = norm
+
+            perm = d[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
+            d[pp.STATE][self.gradient_pressure] = - d[pp.STATE][self.P0_flux] / perm
+
             if u_bar is not None:
                 d[pp.STATE][self.region] = (norm < u_bar).astype(int)
 
