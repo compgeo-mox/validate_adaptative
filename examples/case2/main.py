@@ -19,7 +19,7 @@ def main(region):
 
     # assign the flag for the low permeable fractures
     epsilon = 1e-2
-    
+
     file_name = "case2"
     if region == None:
         folder_name = "./sol/adaptative/"
@@ -29,8 +29,8 @@ def main(region):
         folder_name = "./sol/darcy/"
     elif region == "region_forsh":
         folder_name = "./sol/forsh/"
-                
-    variable_to_export = [Flow.pressure, Flow.P0_flux, Flow.permeability, Flow.P0_flux_norm, Flow.region]
+
+    variable_to_export = [Flow.pressure, Flow.P0_flux, Flow.permeability, Flow.P0_flux_norm, Flow.region, Flow.gradient_pressure]
 
     max_iteration_non_linear = 40
     max_err_non_linear = 1e-8
