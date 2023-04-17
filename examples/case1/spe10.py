@@ -8,9 +8,19 @@ class Spe10(object):
 
 # ------------------------------------------------------------------------------#
 
-    def __init__(self, layers):
-        self.full_shape = (60, 220, 85)
-        self.full_physdims = (365.76, 670.56, 51.816)
+    def __init__(self, layers, pos_x=None, pos_y=None):
+        self.full_shape = np.array([60, 220, 85])
+        self.full_physdims = np.array([365.76, 670.56, 51.816])
+
+        if pos_x is not None:
+            self.pos_x = np.asarray(pos_x)
+        else:
+            self.pos_x = np.arange(self.full_shape[0])
+
+        if pos_y is not None:
+            self.pos_y = np.asarray(pos_y)
+        else:
+            self.pos_y = np.arange(self.full_shape[1])
 
         self.layers = np.sort(np.atleast_1d(layers))
 
@@ -29,21 +39,30 @@ class Spe10(object):
 
     def _compute_size(self):
         dim = self.layers.size
+
+        x_range = np.linspace(0, self.full_physdims[0], self.full_shape[0]+1)[np.r_[self.pos_x, self.pos_x[-1]+1]]
+        y_range = np.linspace(0, self.full_physdims[1], self.full_shape[1]+1)[np.r_[self.pos_y, self.pos_y[-1]+1]]
+
+        bounding_box = {"xmin": x_range[0], "xmax": x_range[-1],
+                        "ymin": y_range[0], "ymax": y_range[-1],
+                        "zmin": 0, "zmax": 0}
         if dim == 1:
-            self.shape = list(self.full_shape[:2])
-            self.physdims = list(self.full_physdims[:2])
+            self.shape = np.hstack((self.pos_x.size, self.pos_y.size))
+            self.physdims = np.hstack((x_range[-1], y_range[-1]))
         else:
-            self.shape = list(self.full_shape[:2]) + [dim]
+            self.shape = np.hstack((self.pos_x.size, self.pos_y.size, dim))
             thickness = self.full_physdims[2] / self.full_shape[2] * dim
-            self.physdims = list(self.full_physdims[:2]) + [thickness]
+            self.physdims = np.hstack((x_range[-1], y_range[-1], thickness))
+            bounding_box["zmax"] = self.physdims[-1]
 
         self.N = np.prod(self.shape)
         self.n = np.prod(self.shape[:2])
+        self.domain = pp.Domain(bounding_box=bounding_box)
 
 # ------------------------------------------------------------------------------#
 
     def _create_mdg(self,):
-        sd = pp.CartGrid(self.shape, self.physdims)
+        sd = pp.CartGrid(self.shape, self.domain.bounding_box)
         sd.compute_geometry()
 
         # it's only one grid but the solver is build on a mdg
@@ -61,9 +80,14 @@ class Spe10(object):
             perm_file = perm_folder + str(layer) + ".tar.gz"
             #perm_file = perm_folder + "small_0.csv"
             perm_layer = np.loadtxt(perm_file, delimiter=",")
-            perm_xx[:, pos] = perm_layer[:, 0]
-            perm_yy[:, pos] = perm_layer[:, 1]
-            perm_zz[:, pos] = perm_layer[:, 2]
+
+            perm_x = perm_layer[:, 0].reshape(self.full_shape[:2], order="F")
+            perm_y = perm_layer[:, 1].reshape(self.full_shape[:2], order="F")
+            perm_z = perm_layer[:, 2].reshape(self.full_shape[:2], order="F")
+
+            perm_xx[:, pos] = perm_x[self.pos_x, :][:, self.pos_y].flatten(order="F")
+            perm_yy[:, pos] = perm_y[self.pos_x, :][:, self.pos_y].flatten(order="F")
+            perm_zz[:, pos] = perm_z[self.pos_x, :][:, self.pos_y].flatten(order="F")
             layers_id[:, pos] = layer
 
         shape = self.n*self.layers.size
