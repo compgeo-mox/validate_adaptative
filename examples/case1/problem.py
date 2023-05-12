@@ -1,21 +1,18 @@
 import numpy as np
+from scipy.stats import hmean
 import porepy as pp
 
 # ------------------------------------------------------------------------------#
 
 class Problem(object):
 
-    def __init__(self, parameters, layers=1):
+    def __init__(self, parameters, layers=35):
         self.parameters = parameters
 
-        self.full_shape = (self.parameters.num_cells_x, \
-                           self.parameters.num_cells_y, \
-                           0)
-        self.full_physdims = (self.parameters.length_x, \
-                              self.parameters.length_y, \
-                              0)
+        self.full_shape = (60, 220, 85)
+        self.full_physdims = (365.76, 670.56, 51.816)
 
-        self.layers = np.sort(np.atleast_1d(layers))
+        self.layers = np.sort(np.atleast_1d(self.parameters.layer))
 
         self.N = 0
         self.n = 0
@@ -49,11 +46,11 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def _create_mdg(self,):
-        self.sd = pp.CartGrid(self.shape, self.physdims)
-        self.sd.compute_geometry()
+        sd = pp.CartGrid(self.shape, self.physdims)
+        sd.compute_geometry()
 
         # it's only one grid but the solver is build on a mdg
-        self.mdg = pp.meshing.subdomains_to_mdg([self.sd])
+        self.mdg = pp.meshing.subdomains_to_mdg([sd])
 
     # ------------------------------------------------------------------------------#
 
@@ -62,27 +59,14 @@ class Problem(object):
         perm_xx, perm_yy, perm_zz = np.empty(shape), np.empty(shape), np.empty(shape)
         layers_id = np.empty(shape)
 
-        # get background (without lenses) permeability or porosity as an array
-        perm = self.parameters.bg_array
-
-        # add highly permeable lenses to intrinsic permeability
-        lenses = self.parameters.lenses
-
         for pos, layer in enumerate(self.layers):
-            # get cells within the lenses
-            coords = self.sd.cell_centers
-            for lens in lenses:
-                cells_lens = [lens["bounds"](coords[0, i], coords[1, i]) for i in range(self.n)]
-                perm[cells_lens] = lens["val"]
-
-            # translate porosity [-] into permeability [m2] if needed
-            if self.parameters.data_kind == "poro":
-                perm = self.kozeny_carman(perm)
+            # get background/intrinsic perm
+            perm_layer = self.parameters.perm_layer
 
             # fill variables to visualize
-            perm_xx[:, pos] = perm.copy()
-            perm_yy[:, pos] = perm.copy()
-            perm_zz[:, pos] = perm.copy()
+            perm_xx[:, pos] = perm_layer[:, 0]
+            perm_yy[:, pos] = perm_layer[:, 1]
+            perm_zz[:, pos] = perm_layer[:, 2]
             layers_id[:, pos] = layer
 
         # reshape
@@ -90,7 +74,7 @@ class Problem(object):
         perm_xx = perm_xx.reshape(shape, order="F")
         perm_yy = perm_yy.reshape(shape, order="F")
         perm_zz = perm_zz.reshape(shape, order="F")
-        self.perm = np.stack((perm_xx, perm_yy, perm_zz)).T # final intrinsic permeability
+        self.perm = np.stack((perm_xx, perm_yy, perm_zz)).T
 
         self.layers_id = layers_id.reshape(shape, order="F")
 
@@ -109,11 +93,13 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def save_perm(self):
+
         names = ["log10_perm_xx", "log10_perm_yy", "log10_perm_zz", "layer_id",
                  "perm_xx", "perm_yy", "perm_zz"]
 
-        # for visualization export the intrinsic perm
+        # for visualization export the intrinsic perm and layer id
         for _, d in self.mdg.subdomains(return_data=True):
+
             d[pp.STATE][names[0]] = np.log10(self.perm[:, 0])
             d[pp.STATE][names[1]] = np.log10(self.perm[:, 1])
             d[pp.STATE][names[2]] = np.log10(self.perm[:, 2])
@@ -148,12 +134,3 @@ class Problem(object):
                 d[pp.STATE][names[1]] = flux * u_bar
                 d[pp.STATE][names[2]] = np.linalg.norm(flux * u_bar, axis=0)
 
-    # ------------------------------------------------------------------------------#
-
-    def kozeny_carman(self, phi):
-        # kozeny carman reference parameters
-        phi_ref = 0.35           # [-]
-        K_ref = 1.0152441851e-9  # [m2]
-
-        return K_ref * \
-            np.square(1-phi_ref)/np.power(phi_ref,3) * np.power(phi,3)/np.square(1-phi)

@@ -16,7 +16,7 @@ import time
 
 def main(region, parameters, problem, data):
     # set files and folders to work with
-    file_name = "case2"
+    file_name = "case1"
     if region == None:
         folder_name = "./solutions/adaptive/"
     elif region == "region":
