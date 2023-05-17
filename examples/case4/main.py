@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, "src/")
 from flow import Flow
-from exporter import write_network_pvd, make_file_name
+from exporter import write_network_pvd
 from solver_codim2 import MVEMCodim2
 
 # ------------------------------------------------------------------------------#
@@ -68,7 +68,7 @@ def main(region):
     max_err_non_linear = 1e-4
 
     # create the grid bucket
-    spe10 = Spe10([35, 36, 37, 38, 39, 40])  # , np.arange(10), np.arange(10))
+    spe10 = Spe10([35, 36]) #, 37, 38, 39, 40])  # , np.arange(10), np.arange(10))
     spe10.read_perm("examples/case1/spe10_perm/")
 
     hx, hy, hz = spe10.physdims / spe10.shape
@@ -175,11 +175,11 @@ def main(region):
 # DA FARE RITORNARE I VALORI PRESSIONE E FLUSSO IN MODO DA CONFRONTARLI
 
 if __name__ == "__main__":
-    # print("Perform the adaptative scheme")
-    # q_adapt, p_adapt = main(None)
+    print("Perform the adaptative scheme")
+    q_adapt, p_adapt = main(None)
     # print("Perform the heterogeneous scheme")
     # q_hete, p_hete = main("region")
-    print("Perform the darcy-based scheme")
-    q_darcy, p_darcy = main("examples/case4/region_darcy")
+    # print("Perform the darcy-based scheme")
+    # q_darcy, p_darcy = main("examples/case4/region_darcy")
     # print("Perform the forshheimer-based scheme")
     # q_forsh, p_forsh = main("region_forsh")

@@ -3,8 +3,8 @@ import porepy as pp
 
 from well_coupling import WellCoupling
 
-class Flow(object):
 
+class Flow(object):
     # post process variables
     pressure = "pressure"
     flux = "darcy_flux"  # it has to be this one
@@ -17,7 +17,6 @@ class Flow(object):
     # ------------------------------------------------------------------------------#
 
     def __init__(self, mdg, model="flow", discr=pp.RT0):
-
         self.model = model
         self.mdg = mdg
         self.data = None
@@ -51,7 +50,7 @@ class Flow(object):
 
             d["deviation_from_plane_tol"] = 1e-8
             d["is_tangential"] = True
-            d["ambient_dimension"] = self.mdg.dim_max(),
+            d["ambient_dimension"] = (self.mdg.dim_max(),)
 
             # assign permeability
             k = data["k"](sd, d, self)
@@ -82,7 +81,7 @@ class Flow(object):
             pp.initialize_data(sd, d, self.model, param)
 
         for intf, data in self.mdg.interfaces(return_data=True):
-            _, sd_secondary =  self.mdg.interface_to_subdomain_pair(intf)
+            _, sd_secondary = self.mdg.interface_to_subdomain_pair(intf)
 
             if sd_secondary.dim == 1 and sd_secondary.well_num > -1:
                 param = {"skin_factor": np.zeros(intf.num_cells)}
@@ -92,15 +91,15 @@ class Flow(object):
     # ------------------------------------------------------------------------------#
 
     def matrix_rhs(self):
-
         discr = self.discr(self.model)
         source = self.source(self.model)
 
         # set the discretization for the grids
         for sd, d in self.mdg.subdomains(return_data=True):
             d[pp.PRIMARY_VARIABLES] = {self.variable: {"cells": 1, "faces": 1}}
-            d[pp.DISCRETIZATION] = {self.variable: {self.discr_name: discr,
-                                                    self.source_name: source}}
+            d[pp.DISCRETIZATION] = {
+                self.variable: {self.discr_name: discr, self.source_name: source}
+            }
             d[pp.DISCRETIZATION_MATRICES] = {self.model: {}}
 
         # define the interface terms to couple the grids
@@ -135,30 +134,38 @@ class Flow(object):
         self.assembler.distribute_variable(x)
 
         discr = self.discr(self.model)
-        for sd, d in self.mdg.subdomains(return_data=True):
-            var = d[pp.STATE][self.variable]
-            d[pp.STATE][self.pressure] = discr.extract_pressure(sd, var, d)
-            d[pp.STATE][self.flux] = discr.extract_flux(sd, var, d)
+        for sd, data in self.mdg.subdomains(return_data=True):
+            var = data[pp.TIME_STEP_SOLUTIONS][self.variable][0]
+            pressure = discr.extract_pressure(sd, var, data)
+            flux = discr.extract_flux(sd, var, data)
+            perm = data[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
 
-            perm = d[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
-            d[pp.STATE][self.permeability] = perm
+            pp.set_solution_values(self.pressure, pressure, data, 0)
+            pp.set_solution_values(self.flux, flux, data, 0)
+            pp.set_solution_values(self.permeability, perm, data, 0)
 
             if "original_id" in sd.tags:
-                d[pp.STATE]["original_id"] = sd.tags["original_id"] * np.ones(sd.num_cells)
+                original_id = sd.tags["original_id"] * np.ones(sd.num_cells)
+                pp.set_solution_values("original_id", original_id, data, 0)
+
             if "condition" in sd.tags:
-                d[pp.STATE]["condition"] = sd.tags["condition"] * np.ones(sd.num_cells)
+                condition = sd.tags["condition"] * np.ones(sd.num_cells)
+                pp.set_solution_values("condition", condition, data, 0)
 
         # export the P0 flux reconstruction
         pp.project_flux(self.mdg, discr, self.flux, self.P0_flux, self.mortar)
 
-        for _, d in self.mdg.subdomains(return_data=True):
-            norm = np.linalg.norm(d[pp.STATE][self.P0_flux], axis=0)
-            d[pp.STATE][self.P0_flux_norm] = norm
+        for _, data in self.mdg.subdomains(return_data=True):
+            flux = data[pp.TIME_STEP_SOLUTIONS][self.P0_flux][0]
+            norm = np.linalg.norm(flux, axis=0)
+            pp.set_solution_values(self.P0_flux_norm, norm, data, 0)
 
-            perm = d[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
-            d[pp.STATE][self.gradient_pressure] = - d[pp.STATE][self.P0_flux] / perm
+            perm = data[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
+            gradient = -flux / perm
+            pp.set_solution_values(self.gradient_pressure, gradient, data, 0)
 
             if u_bar is not None:
-                d[pp.STATE][self.region] = (norm < u_bar).astype(int)
+                where_u_bar = (norm < u_bar).astype(int)
+                pp.set_solution_values(self.region, where_u_bar, data, 0)
 
     # ------------------------------------------------------------------------------#
