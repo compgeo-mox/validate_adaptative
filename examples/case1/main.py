@@ -2,46 +2,51 @@ import numpy as np
 import porepy as pp
 import scipy.sparse as sps
 
-from data import Data
 from problem import Problem
+from parameters import Parameters
+from data import Data
 
-import sys; sys.path.insert(0, "../../src/")
+import sys
+
+sys.path.insert(0, "../../src/")
 from flow import Flow
 import tags
 from exporter import write_network_pvd, make_file_name
+import time
 
 # ------------------------------------------------------------------------------#
 
-def main(region):
 
-    # tolerance in the computation
-    tol = 1e-10
-
-    # assign the flag for the low permeable fractures
-    epsilon = 1e-2
-
+def main(region, parameters, problem, data):
+    # set files and folders to work with
     file_name = "case1"
     if region == None:
-        folder_name = "./sol/adaptative/"
+        folder_name = "./solutions/adaptive/"
     elif region == "region":
-        folder_name = "./sol/heterogeneous/"
+        folder_name = "./solutions/heterogeneous/"
     elif region == "region_darcy":
-        folder_name = "./sol/darcy/"
-    elif region == "region_forsh":
-        folder_name = "./sol/forsh/"
+        folder_name = "./solutions/darcy/"
+    elif region == "region_forch":
+        folder_name = "./solutions/forch/"
 
-    variable_to_export = [Flow.pressure, Flow.P0_flux, Flow.permeability, Flow.P0_flux_norm, Flow.region, Flow.gradient_pressure]
+    # variables to visualize
+    variable_to_export = [
+        Flow.pressure,
+        Flow.P0_flux,
+        Flow.permeability,
+        Flow.P0_flux_norm,
+        Flow.region,
+    ]
 
-    max_iteration_non_linear = 40
+    # parameters for nonlinear solver
+    max_iteration_non_linear = 100
     max_err_non_linear = 1e-8
 
-    # create the grid bucket
-    problem = Problem()
-    problem.read_perm()
-
     # create the discretization
-    discr = Flow(problem.mdg, discr = pp.MVEM)
-    test_data = Data(problem, epsilon=epsilon, region=region)
+    discr = Flow(problem.mdg, discr=pp.MVEM)
+
+    # compute the effective speed-dependent permeability
+    data.get_perm_factor(region=region)
 
     for sd, d in problem.mdg.subdomains(return_data=True):
         d.update({pp.STATE: {}})
@@ -49,19 +54,24 @@ def main(region):
         d[pp.STATE].update({Flow.P0_flux: flux})
         d[pp.STATE].update({Flow.P0_flux + "_old": flux})
 
-    variable_to_export += problem.save_perm()
+    variable_to_export += problem.save_perm()  # add intrinsic permeability to visualize
+    variable_to_export += (
+        problem.save_forch_vars()
+    )  # add Forchheimer number and other vars
 
     # non-linear problem solution with a fixed point strategy
     err_non_linear = max_err_non_linear + 1
     iteration_non_linear = 0
-    while err_non_linear > max_err_non_linear and iteration_non_linear < max_iteration_non_linear:
-
+    while (
+        err_non_linear > max_err_non_linear
+        and iteration_non_linear < max_iteration_non_linear
+    ):
         # solve the linearized problem
-        discr.set_data(test_data.get())
+        discr.set_data(data.get())
 
         A, b = discr.matrix_rhs()
         x = sps.linalg.spsolve(A, b)
-        discr.extract(x, u_bar=1)
+        discr.extract(x, u_bar=1)  # u_bar=1 here because fluxes are normalized by u_bar
 
         # compute the exit condition
         all_flux = np.empty((3, 0))
@@ -80,15 +90,27 @@ def main(region):
             d[pp.STATE][Flow.P0_flux + "_old"] = flux
 
         # compute the error and normalize the result
-        err_non_linear = np.sum(all_cell_volumes * np.linalg.norm(all_flux - all_flux_old, axis=0))
+        err_non_linear = np.sum(
+            all_cell_volumes * np.linalg.norm(all_flux - all_flux_old, axis=0)
+        )
         norm_flux_old = np.sum(all_cell_volumes * np.linalg.norm(all_flux_old, axis=0))
-        err_non_linear = err_non_linear / norm_flux_old if norm_flux_old != 0 else err_non_linear
+        err_non_linear = (
+            err_non_linear / norm_flux_old if norm_flux_old != 0 else err_non_linear
+        )
+
+        # save new Forchheimer number
+        problem.save_forch_vars(flux=all_flux)
 
         # exporter
         save = pp.Exporter(problem.mdg, "sol_" + file_name, folder_name=folder_name)
         save.write_vtu(variable_to_export, time_step=iteration_non_linear)
 
-        print("iteration non-linear problem", iteration_non_linear, "error", err_non_linear)
+        print(
+            "iteration non-linear problem",
+            iteration_non_linear,
+            "error",
+            err_non_linear,
+        )
         iteration_non_linear += 1
 
     save.write_pvd(np.arange(iteration_non_linear))
@@ -96,66 +118,100 @@ def main(region):
 
     for sd, d in problem.mdg.subdomains(return_data=True):
         if region is None:
-            np.savetxt(Flow.region, d[pp.STATE][Flow.region])
+            np.savetxt("./regions/" + Flow.region, d[pp.STATE][Flow.region])
         flux = d[pp.STATE][Flow.P0_flux]
         pressure = d[pp.STATE][Flow.pressure]
 
     return flux, pressure, problem.mdg
 
+
 # ------------------------------------------------------------------------------#
 
 if __name__ == "__main__":
-    print("Perform the adaptative scheme")
-    q_adapt, p_adapt, mdg = main(None)
-    print("Perform the heterogeneous scheme")
-    q_hete, p_hete, _ = main("region")
-    print("Perform the darcy-based scheme")
-    q_darcy, p_darcy, _ = main("region_darcy")
-    print("Perform the forshheimer-based scheme")
-    q_forsh, p_forsh, _ = main("region_forsh")
+    parameters = Parameters()  # get parameters, print them and read porosity
+    problem = Problem(
+        parameters
+    )  # create the grid bucket and get intrinsic permeability
+    data = Data(
+        parameters, problem
+    )  # get data for computation of speed-dependent permeability
 
-    region = np.loadtxt("region").astype(bool)
-    p_ref = p_forsh
-    q_ref = q_forsh
+    # run the various schemes
+    print("", "---- Perform the adaptive scheme ----", sep="\n")
+    start = time.time()
+    q_adapt, p_adapt, mdg = main(None, parameters, problem, data)
+    end = time.time()
+    print("run time =", end - start, "[s]")
 
-    for reg in np.unique(region):
-        pos = region == reg
-        # mass matrix
-        mass = sps.diags([sd.cell_volumes[pos] for sd in mdg.subdomains()], [0])
+    print("", "---- Perform the heterogeneous scheme ----", sep="\n")
+    start = time.time()
+    q_hete, p_hete, _ = main("region", parameters, problem, data)
+    end = time.time()
+    print("run time =", end - start, "[s]")
 
-        norm_scalar = lambda x: np.sqrt(x @ mass @ x)
-        norm_vector = lambda x: np.sqrt(np.linalg.norm(x, axis=0) @ mass @ np.linalg.norm(x, axis=0))
+    print("", "---- Perform the Darcy scheme ----", sep="\n")
+    start = time.time()
+    q_darcy, p_darcy, _ = main("region_darcy", parameters, problem, data)
+    end = time.time()
+    print("run time =", end - start, "[s]")
 
-        # we assume to be the adaptative solution as the reference
-        norm_p_ref = norm_scalar(p_ref[pos])
-        norm_q_ref = norm_vector(q_ref[:, pos])
+    print("", "---- Perform the Forchheimer scheme ----", sep="\n")
+    start = time.time()
+    q_forch, p_forch, _ = main("region_forch", parameters, problem, data)
+    end = time.time()
+    print("run time =", end - start, "[s]")
 
-        # let's compute the errors
-        err_p_hete = norm_scalar(p_ref[pos] - p_hete[pos]) / norm_p_ref
-        err_q_hete = norm_vector(q_ref[:, pos] - q_hete[:, pos]) / norm_q_ref
+    # compute the errors with respect to reference scheme (Forchheimer)
+    compute_errors = True
 
-        err_p_darcy = norm_scalar(p_ref[pos] - p_darcy[pos]) / norm_p_ref
-        err_q_darcy = norm_vector(q_ref[:, pos] - q_darcy[:, pos]) / norm_q_ref
+    if compute_errors:
+        print(
+            " ",
+            "---- Compute errors with respect to the Forchheimer scheme ----",
+            sep="\n",
+        )
+        region = np.loadtxt("./regions/region").astype(bool)
+        p_ref = p_forch
+        q_ref = q_forch
 
-        err_p_forsh = norm_scalar(p_ref[pos] - p_forsh[pos]) / norm_p_ref
-        err_q_forsh = norm_vector(q_ref[:, pos] - q_forsh[:, pos]) / norm_q_ref
+        for reg in np.unique(region):
+            pos = region == reg
+            # mass matrix
+            mass = sps.diags([sd.cell_volumes[pos] for sd in mdg.subdomains()], [0])
 
-        print("Region", {True: "darcy", False: "forsh"}[reg])
-        print("------")
+            norm_scalar = lambda x: np.sqrt(x @ mass @ x)
+            norm_vector = lambda x: np.sqrt(
+                np.linalg.norm(x, axis=0) @ mass @ np.linalg.norm(x, axis=0)
+            )
 
-        print("Errors for case hete:")
-        print("pressure", err_p_hete)
-        print("flux", err_q_hete)
-        print("------")
+            # we assume to be the adaptive solution as the reference
+            norm_p_ref = norm_scalar(p_ref[pos])
+            norm_q_ref = norm_vector(q_ref[:, pos])
 
-        print("Errors for case darcy:")
-        print("pressure", err_p_darcy)
-        print("flux", err_q_darcy)
-        print("------")
+            # let's compute the errors
+            err_p_hete = norm_scalar(p_ref[pos] - p_hete[pos]) / norm_p_ref
+            err_q_hete = norm_vector(q_ref[:, pos] - q_hete[:, pos]) / norm_q_ref
 
-        print("Errors for case forsh:")
-        print("pressure", err_p_forsh)
-        print("flux", err_q_forsh)
-        print("------")
+            err_p_darcy = norm_scalar(p_ref[pos] - p_darcy[pos]) / norm_p_ref
+            err_q_darcy = norm_vector(q_ref[:, pos] - q_darcy[:, pos]) / norm_q_ref
 
-    import pdb; pdb.set_trace()
+            err_p_forch = norm_scalar(p_ref[pos] - p_forch[pos]) / norm_p_ref
+            err_q_forch = norm_vector(q_ref[:, pos] - q_forch[:, pos]) / norm_q_ref
+
+            print("------")
+            print("In", {True: "Darcy", False: "Forchheimer"}[reg], "region")
+            print("------")
+
+            print("Errors for the heterogeneous scheme:")
+            print("Pressure", err_p_hete)
+            print("Flux", err_q_hete)
+            print("------")
+
+            print("Errors for the Darcy scheme:")
+            print("Pressure", err_p_darcy)
+            print("Flux", err_q_darcy)
+            print("------")
+
+            print("Errors for the Forchheimer scheme:")
+            print("Pressure", err_p_forch)
+            print("Flux", err_q_forch)
