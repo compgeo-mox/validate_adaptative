@@ -4,15 +4,23 @@ import porepy as pp
 
 # ------------------------------------------------------------------------------#
 
-class Problem(object):
 
-    def __init__(self, parameters, layers=35):
+class Problem(object):
+    def __init__(self, parameters, pos_x=None, pos_y=None):
         self.parameters = parameters
 
         self.full_shape = (60, 220, 85)
         self.full_physdims = (365.76, 670.56, 51.816)
 
-        self.layers = np.sort(np.atleast_1d(self.parameters.layer))
+        if pos_x is not None:
+            self.pos_x = np.asarray(pos_x)
+        else:
+            self.pos_x = np.arange(self.full_shape[0])
+
+        if pos_y is not None:
+            self.pos_y = np.asarray(pos_y)
+        else:
+            self.pos_y = np.arange(self.full_shape[1])
 
         self.N = 0
         self.n = 0
@@ -31,21 +39,41 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def _compute_size(self):
-        dim = self.layers.size
+        dim = self.parameters.layers.size
+
+        x_range = np.linspace(0, self.full_physdims[0], self.full_shape[0] + 1)[
+            np.r_[self.pos_x, self.pos_x[-1] + 1]
+        ]
+        y_range = np.linspace(0, self.full_physdims[1], self.full_shape[1] + 1)[
+            np.r_[self.pos_y, self.pos_y[-1] + 1]
+        ]
+
+        bounding_box = {
+            "xmin": x_range[0],
+            "xmax": x_range[-1],
+            "ymin": y_range[0],
+            "ymax": y_range[-1],
+            "zmin": 0,
+            "zmax": 0,
+        }
         if dim == 1:
-            self.shape = list(self.full_shape[:2])
-            self.physdims = list(self.full_physdims[:2])
+            self.shape = np.hstack((self.pos_x.size, self.pos_y.size))
+            self.physdims = np.hstack((x_range[-1], y_range[-1]))
         else:
-            self.shape = list(self.full_shape[:2]) + [dim]
+            self.shape = np.hstack((self.pos_x.size, self.pos_y.size, dim))
             thickness = self.full_physdims[2] / self.full_shape[2] * dim
-            self.physdims = list(self.full_physdims[:2]) + [thickness]
+            self.physdims = np.hstack((x_range[-1], y_range[-1], thickness))
+            bounding_box["zmax"] = self.physdims[-1]
 
         self.N = np.prod(self.shape)
         self.n = np.prod(self.shape[:2])
+        self.domain = pp.Domain(bounding_box=bounding_box)
 
     # ------------------------------------------------------------------------------#
 
-    def _create_mdg(self,):
+    def _create_mdg(
+        self,
+    ):
         sd = pp.CartGrid(self.shape, self.physdims)
         sd.compute_geometry()
 
@@ -55,22 +83,27 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def _read_perm(self):
-        shape = (self.n, self.layers.size)
+        shape = (self.n, self.parameters.layers.size)
         perm_xx, perm_yy, perm_zz = np.empty(shape), np.empty(shape), np.empty(shape)
         layers_id = np.empty(shape)
 
-        for pos, layer in enumerate(self.layers):
+        for pos, layer in enumerate(self.parameters.layers):
             # get background/intrinsic perm
-            perm_layer = self.parameters.perm_layer
+            perm_layer = self.parameters.perm_layer[pos]
 
             # fill variables to visualize
-            perm_xx[:, pos] = perm_layer[:, 0]
-            perm_yy[:, pos] = perm_layer[:, 1]
-            perm_zz[:, pos] = perm_layer[:, 2]
+            perm_x = perm_layer[:, 0].reshape(self.full_shape[:2], order="F")
+            perm_y = perm_layer[:, 1].reshape(self.full_shape[:2], order="F")
+            perm_z = perm_layer[:, 2].reshape(self.full_shape[:2], order="F")
+
+            perm_xx[:, pos] = perm_x[self.pos_x, :][:, self.pos_y].flatten(order="F")
+            perm_yy[:, pos] = perm_y[self.pos_x, :][:, self.pos_y].flatten(order="F")
+            perm_zz[:, pos] = perm_z[self.pos_x, :][:, self.pos_y].flatten(order="F")
+
             layers_id[:, pos] = layer
 
         # reshape
-        shape = self.n*self.layers.size
+        shape = self.n * self.parameters.layers.size
         perm_xx = perm_xx.reshape(shape, order="F")
         perm_yy = perm_yy.reshape(shape, order="F")
         perm_zz = perm_zz.reshape(shape, order="F")
@@ -84,31 +117,37 @@ class Problem(object):
         mu = self.parameters.mu
         beta = self.parameters.beta
         Fo_c = self.parameters.Fo_c
-        K_max = np.max(self.perm[:, 0]) # maximum intrinsic permeability [m2]
+        K_max = np.max(self.perm[:, 0])  # maximum intrinsic permeability [m2]
 
-        self.u_bar = mu/(beta*np.sqrt(K_max)) * Fo_c # threshold speed [m/s]
+        self.u_bar = mu / (beta * np.sqrt(K_max)) * Fo_c  # threshold speed [m/s]
 
-        print("u_bar =", round(self.u_bar,5), "[m/s]")
+        print("u_bar =", round(self.u_bar, 5), "[m/s]")
 
     # ------------------------------------------------------------------------------#
 
     def save_perm(self):
-
-        names = ["log10_perm_xx", "log10_perm_yy", "log10_perm_zz", "layer_id",
-                 "perm_xx", "perm_yy", "perm_zz"]
+        names = [
+            "log10_perm_xx",
+            "log10_perm_yy",
+            "log10_perm_zz",
+            "layer_id",
+            "perm_xx",
+            "perm_yy",
+            "perm_zz",
+        ]
 
         # for visualization export the intrinsic perm and layer id
-        for _, d in self.mdg.subdomains(return_data=True):
+        for sd, d in self.mdg.subdomains(return_data=True):
+            if sd.dim == self.mdg.dim_max():
+                pp.set_solution_values(names[0], np.log10(self.perm[:, 0]), d, 0)
+                pp.set_solution_values(names[1], np.log10(self.perm[:, 1]), d, 0)
+                pp.set_solution_values(names[2], np.log10(self.perm[:, 2]), d, 0)
 
-            d[pp.STATE][names[0]] = np.log10(self.perm[:, 0])
-            d[pp.STATE][names[1]] = np.log10(self.perm[:, 1])
-            d[pp.STATE][names[2]] = np.log10(self.perm[:, 2])
+                pp.set_solution_values(names[3], self.layers_id, d, 0)
 
-            d[pp.STATE][names[3]] = self.layers_id
-
-            d[pp.STATE][names[4]] = self.perm[:, 0]
-            d[pp.STATE][names[5]] = self.perm[:, 1]
-            d[pp.STATE][names[6]] = self.perm[:, 2]
+                pp.set_solution_values(names[4], self.perm[:, 0], d, 0)
+                pp.set_solution_values(names[5], self.perm[:, 1], d, 0)
+                pp.set_solution_values(names[6], self.perm[:, 2], d, 0)
 
         return names
 
@@ -120,17 +159,19 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def save_forch_vars(self, flux=None):
-        names = ["Forchheimer number", "P0_darcy_flux_denormalized", \
-                 "P0_darcy_flux_denormalized_norm"]
+        names = [
+            "Forchheimer number",
+            "P0_darcy_flux_denormalized",
+            "P0_darcy_flux_denormalized_norm",
+        ]
 
         # for visualization export the Forchheimer number and denormalized fluxes (*u_bar)
-        if flux is None: # no flux is given: only give name of variable to visualize
+        if flux is None:  # no flux is given: only give name of variable to visualize
             return names
-        else: # flux is given: compute Forchheimer number and store it
+        else:  # flux is given: compute Forchheimer number and store it
             Fo_c = self.parameters.Fo_c
             u_bar = self.u_bar
             for _, d in self.mdg.subdomains(return_data=True):
                 d[pp.STATE][names[0]] = Fo_c * np.linalg.norm(flux, axis=0)
                 d[pp.STATE][names[1]] = flux * u_bar
                 d[pp.STATE][names[2]] = np.linalg.norm(flux * u_bar, axis=0)
-
