@@ -6,7 +6,8 @@ from data import Data
 import sys
 
 sys.path.insert(0, "examples/case1/")
-from spe10 import Spe10
+from problem import Problem
+from parameters import Parameters
 
 import sys
 
@@ -47,6 +48,16 @@ def add_wells(mdg, domain, well_coords, well_num_cells, tol):
 
 
 def main(region):
+    parameters = Parameters(
+        layers=np.arange(20) + 35, perm_folder="examples/case1/spe10_perm/"
+    )  # get parameters, print them and read porosity
+    problem = Problem(
+        parameters, pos_x=np.arange(10), pos_y=np.arange(10)
+    )  # create the grid bucket and get intrinsic permeability
+    data = Data(
+        parameters, problem
+    )  # get data for computation of speed-dependent permeability
+
     # tolerance in the computation
     tol = 1e-10
 
@@ -67,45 +78,73 @@ def main(region):
     max_iteration_non_linear = 20
     max_err_non_linear = 1e-4
 
-    # create the grid bucket
-    spe10 = Spe10([35, 36]) #, 37, 38, 39, 40])  # , np.arange(10), np.arange(10))
-    spe10.read_perm("examples/case1/spe10_perm/")
-
-    hx, hy, hz = spe10.physdims / spe10.shape
+    hx, hy, hz = problem.physdims / problem.shape
 
     # add the wells
+    well_hight = 6.5
     well_coords = np.asarray(
         [
             np.array(
                 [
-                    [1.5 * hx, 1.5 * hx],
-                    [1.5 * hy, 1.5 * hy],
-                    [spe10.physdims[2], spe10.physdims[2] - 2.5 * hz],
+                    [0.5 * hx, 0.5 * hx],
+                    [0.5 * hy, 0.5 * hy],
+                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
                 ]
             ),
             np.array(
                 [
-                    [spe10.physdims[0] - 1.5 * hx, spe10.physdims[0] - 1.5 * hx],
-                    [spe10.physdims[1] - 1.5 * hy, spe10.physdims[1] - 1.5 * hy],
-                    [spe10.physdims[2], spe10.physdims[2] - 2.5 * hz],
+                    [problem.physdims[0] - 0.5 * hx, problem.physdims[0] - 0.5 * hx],
+                    [0.5 * hy, 0.5 * hy],
+                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
+                ]
+            ),
+            np.array(
+                [
+                    [0.5 * hx, 0.5 * hx],
+                    [problem.physdims[1] - 0.5 * hy, problem.physdims[1] - 0.5 * hy],
+                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
+                ]
+            ),
+            np.array(
+                [
+                    [problem.physdims[0] - 0.5 * hx, problem.physdims[0] - 0.5 * hx],
+                    [problem.physdims[1] - 0.5 * hy, problem.physdims[1] - 0.5 * hy],
+                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
+                ]
+            ),
+            np.array(
+                [
+                    [
+                        0.5 * problem.physdims[0] - 0.5 * hx,
+                        0.5 * problem.physdims[0] - 0.5 * hx,
+                    ],
+                    [
+                        0.5 * problem.physdims[1] - 0.5 * hy,
+                        0.5 * problem.physdims[1] - 0.5 * hy,
+                    ],
+                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
                 ]
             ),
         ]
     )
     well_num_cells = 4
 
-    spe10.mdg = add_wells(spe10.mdg, spe10.domain, well_coords, well_num_cells, tol)
+    problem.mdg = add_wells(
+        problem.mdg, problem.domain, well_coords, well_num_cells, tol
+    )
 
     # create the discretization
-    discr = Flow(spe10.mdg, discr=MVEMCodim2)
-    test_data = Data(spe10, epsilon, u_bar, region=region)
+    discr = Flow(problem.mdg, discr=MVEMCodim2)
 
-    for sd, d in spe10.mdg.subdomains(return_data=True):
+    # compute the effective speed-dependent permeability
+    data.get_perm_factor(region=region)
+
+    for sd, d in problem.mdg.subdomains(return_data=True):
         flux = np.zeros((3, sd.num_cells))
         pp.set_solution_values(Flow.P0_flux, flux, d, 0)
         pp.set_solution_values(Flow.P0_flux + "_old", flux.copy(), d, 0)
 
-    variable_to_export += spe10.save_perm()
+    variable_to_export += problem.save_perm()
 
     # non-linear problem solution with a fixed point strategy
     err_non_linear = max_err_non_linear + 1
@@ -115,7 +154,7 @@ def main(region):
         and iteration_non_linear < max_iteration_non_linear
     ):
         # solve the linearized problem
-        discr.set_data(test_data.get())
+        discr.set_data(data.get())
 
         A, b = discr.matrix_rhs()
         x = sps.linalg.spsolve(A, b)
@@ -125,7 +164,7 @@ def main(region):
         all_flux = np.empty((3, 0))
         all_flux_old = np.empty((3, 0))
         all_cell_volumes = np.empty(0)
-        for sd, d in spe10.mdg.subdomains(return_data=True):
+        for sd, d in problem.mdg.subdomains(return_data=True):
             # collect the current flux
             flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
             all_flux = np.hstack((all_flux, flux))
@@ -147,7 +186,7 @@ def main(region):
         )
 
         # exporter
-        save = pp.Exporter(spe10.mdg, "sol_" + file_name, folder_name=folder_name)
+        save = pp.Exporter(problem.mdg, "sol_" + file_name, folder_name=folder_name)
         save.write_vtu(variable_to_export, time_step=iteration_non_linear)
 
         print(
@@ -161,7 +200,7 @@ def main(region):
     save.write_pvd(np.arange(iteration_non_linear))
     write_network_pvd(file_name, folder_name, np.arange(iteration_non_linear))
 
-    for sd, d in spe10.mdg.subdomains(return_data=True):
+    for sd, d in problem.mdg.subdomains(return_data=True):
         if region is None:
             np.savetxt(Flow.region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
         flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
