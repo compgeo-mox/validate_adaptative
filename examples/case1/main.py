@@ -6,9 +6,7 @@ from problem import Problem
 from parameters import Parameters
 from data import Data
 
-import sys
-
-sys.path.insert(0, "../../src/")
+import sys; sys.path.insert(0, "../../src/")
 from flow import Flow
 import tags
 from exporter import write_network_pvd, make_file_name
@@ -30,13 +28,11 @@ def main(region, parameters, problem, data):
         folder_name = "./solutions/forch/"
 
     # variables to visualize
-    variable_to_export = [
-        Flow.pressure,
-        Flow.P0_flux,
-        Flow.permeability,
-        Flow.P0_flux_norm,
-        Flow.region,
-    ]
+    variable_to_export = [Flow.pressure, \
+                          Flow.P0_flux, \
+                          Flow.permeability, \
+                          Flow.P0_flux_norm, \
+                          Flow.region]
 
     # parameters for nonlinear solver
     max_iteration_non_linear = 100
@@ -45,14 +41,13 @@ def main(region, parameters, problem, data):
     # create the discretization
     discr = Flow(problem.mdg, discr=pp.MVEM)
 
-    # compute the effective speed-dependent permeability
+    # compute the effective flux-dependent permeability
     data.get_perm_factor(region=region)
 
     for sd, d in problem.mdg.subdomains(return_data=True):
-        d.update({pp.STATE: {}})
         flux = np.zeros((3, sd.num_cells))
-        d[pp.STATE].update({Flow.P0_flux: flux})
-        d[pp.STATE].update({Flow.P0_flux + "_old": flux})
+        pp.set_solution_values(Flow.P0_flux, flux, d, 0)
+        pp.set_solution_values(Flow.P0_flux + "_old", flux.copy(), d, 0)
 
     variable_to_export += problem.save_perm()  # add intrinsic permeability to visualize
     variable_to_export += (
@@ -79,15 +74,15 @@ def main(region, parameters, problem, data):
         all_cell_volumes = np.empty(0)
         for sd, d in problem.mdg.subdomains(return_data=True):
             # collect the current flux
-            flux = d[pp.STATE][Flow.P0_flux]
+            flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
             all_flux = np.hstack((all_flux, flux))
             # collect the old flux
-            flux_old = d[pp.STATE][Flow.P0_flux + "_old"]
+            flux_old = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux + "_old"][0]
             all_flux_old = np.hstack((all_flux_old, flux_old))
             # collect the cell volumes
             all_cell_volumes = np.hstack((all_cell_volumes, sd.cell_volumes))
             # save the old flux
-            d[pp.STATE][Flow.P0_flux + "_old"] = flux
+            pp.set_solution_values(Flow.P0_flux + "_old", flux, d, 0)
 
         # compute the error and normalize the result
         err_non_linear = np.sum(
@@ -118,9 +113,9 @@ def main(region, parameters, problem, data):
 
     for sd, d in problem.mdg.subdomains(return_data=True):
         if region is None:
-            np.savetxt("./regions/" + Flow.region, d[pp.STATE][Flow.region])
-        flux = d[pp.STATE][Flow.P0_flux]
-        pressure = d[pp.STATE][Flow.pressure]
+            np.savetxt("./regions/" + Flow.region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
+        flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
+        pressure = d[pp.TIME_STEP_SOLUTIONS][Flow.pressure][0]
 
     return flux, pressure, problem.mdg
 
@@ -128,13 +123,9 @@ def main(region, parameters, problem, data):
 # ------------------------------------------------------------------------------#
 
 if __name__ == "__main__":
-    parameters = Parameters()  # get parameters, print them and read porosity
-    problem = Problem(
-        parameters
-    )  # create the grid bucket and get intrinsic permeability
-    data = Data(
-        parameters, problem
-    )  # get data for computation of speed-dependent permeability
+    parameters = Parameters()         # get parameters, print them and read porosity
+    problem = Problem(parameters)     # create the grid bucket and get intrinsic permeability
+    data = Data(parameters, problem)  # get data for computation of flux-dependent permeability
 
     # run the various schemes
     print("", "---- Perform the adaptive scheme ----", sep="\n")

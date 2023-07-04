@@ -16,7 +16,7 @@ class Data:
 
         # get necessary parameters
         u_bar = self.problem.u_bar
-        mu = self.parameters.mu * u_bar  # multiply by u_bar for normalization
+        nu = self.parameters.nu * u_bar  # multiply by u_bar for normalization
         beta = self.parameters.beta * np.square(u_bar)  # idem
         zero = 0.0  # to be put as second-order term in Darcy region
 
@@ -27,16 +27,16 @@ class Data:
         homogeneous_perm = True if np.unique(bg_K).size == 1 else False
 
         if homogeneous_perm is True and (
-            np.asarray(mu).size == 1 and np.asarray(beta).size == 1
+            np.asarray(nu).size == 1 and np.asarray(beta).size == 1
         ):
             beta *= np.sqrt(bg_K[0])
         else:
-            mu *= np.ones(bg_K.size)
+            nu *= np.ones(bg_K.size)
             beta *= np.sqrt(bg_K)
             zero *= np.ones(bg_K.size)
 
         # gather all law coefficients in one list
-        self.coeffs = [[mu, zero], [mu, beta]]
+        self.coeffs = [ [nu, zero], [nu, beta] ]
 
         # ranges to define regions (normalized by u_bar)
         range_1 = lambda a: np.logical_and(a >= 0, a <= 1)  # slow-speed region (Darcy)

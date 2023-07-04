@@ -29,7 +29,7 @@ class Problem(object):
         self.partition = None
 
         self._read_perm()
-        self._compute_threshold_speed()
+        self._compute_threshold_flux()
 
     # ------------------------------------------------------------------------------#
 
@@ -96,15 +96,16 @@ class Problem(object):
 
     # ------------------------------------------------------------------------------#
 
-    def _compute_threshold_speed(self):
-        mu = self.parameters.mu
-        beta = self.parameters.beta
+    def _compute_threshold_flux(self):
+        mu = np.min(np.asarray(self.parameters.mu))
+        rho = np.max(np.asarray(self.parameters.rho))
+        beta = np.max(np.asarray(self.parameters.beta))
         Fo_c = self.parameters.Fo_c
-        K_max = np.max(self.perm[:, 0]) # maximum intrinsic permeability [m2]
+        K = np.max(self.perm[:, 0])
 
-        self.u_bar = mu/(beta*np.sqrt(K_max)) * Fo_c # threshold speed [m/s]
+        self.u_bar = mu/(rho*beta*np.sqrt(K)) * Fo_c # threshold flux [kg/m2/s]
 
-        print("u_bar =", round(self.u_bar,5), "[m/s]")
+        print("u_bar =", round(self.u_bar, 5), "[kg/m2/s]")
 
     # ------------------------------------------------------------------------------#
 
@@ -114,15 +115,15 @@ class Problem(object):
 
         # for visualization export the intrinsic perm
         for _, d in self.mdg.subdomains(return_data=True):
-            d[pp.STATE][names[0]] = np.log10(self.perm[:, 0])
-            d[pp.STATE][names[1]] = np.log10(self.perm[:, 1])
-            d[pp.STATE][names[2]] = np.log10(self.perm[:, 2])
+            pp.set_solution_values(names[0], np.log10(self.perm[:, 0]), d, 0)
+            pp.set_solution_values(names[1], np.log10(self.perm[:, 1]), d, 0)
+            pp.set_solution_values(names[2], np.log10(self.perm[:, 2]), d, 0)
 
-            d[pp.STATE][names[3]] = self.layers_id
+            pp.set_solution_values(names[3], self.layers_id, d, 0)
 
-            d[pp.STATE][names[4]] = self.perm[:, 0]
-            d[pp.STATE][names[5]] = self.perm[:, 1]
-            d[pp.STATE][names[6]] = self.perm[:, 2]
+            pp.set_solution_values(names[4], self.perm[:, 0], d, 0)
+            pp.set_solution_values(names[5], self.perm[:, 1], d, 0)
+            pp.set_solution_values(names[6], self.perm[:, 2], d, 0)
 
         return names
 
@@ -134,19 +135,23 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def save_forch_vars(self, flux=None):
-        names = ["Forchheimer number", "P0_darcy_flux_denormalized", \
-                 "P0_darcy_flux_denormalized_norm"]
+        names = ["Forchheimer number", \
+                 "P0_darcy_flux_denormalized", "P0_darcy_flux_denormalized_norm", \
+                 "P0_darcy_velocity_denormalized", "P0_darcy_velocity_denormalized_norm"]
 
         # for visualization export the Forchheimer number and denormalized fluxes (*u_bar)
         if flux is None: # no flux is given: only give name of variable to visualize
             return names
         else: # flux is given: compute Forchheimer number and store it
             Fo_c = self.parameters.Fo_c
+            rho = self.parameters.rho
             u_bar = self.u_bar
             for _, d in self.mdg.subdomains(return_data=True):
-                d[pp.STATE][names[0]] = Fo_c * np.linalg.norm(flux, axis=0)
-                d[pp.STATE][names[1]] = flux * u_bar
-                d[pp.STATE][names[2]] = np.linalg.norm(flux * u_bar, axis=0)
+                pp.set_solution_values(names[0], Fo_c * np.linalg.norm(flux, axis=0), d, 0)
+                pp.set_solution_values(names[1], flux * u_bar, d, 0)
+                pp.set_solution_values(names[2], np.linalg.norm(flux * u_bar, axis=0), d, 0)
+                pp.set_solution_values(names[3], flux/rho * u_bar, d, 0)
+                pp.set_solution_values(names[4], np.linalg.norm(flux/rho * u_bar, axis=0), d, 0)
 
     # ------------------------------------------------------------------------------#
 

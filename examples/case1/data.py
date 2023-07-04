@@ -16,7 +16,7 @@ class Data:
 
         # get necessary parameters
         u_bar = self.problem.u_bar
-        mu = self.parameters.mu *u_bar # multiply by u_bar for normalization
+        nu = self.parameters.nu *u_bar # multiply by u_bar for normalization
         beta = self.parameters.beta *np.square(u_bar) # idem
         zero = 0. # to be put as second-order term in Darcy region
 
@@ -24,26 +24,26 @@ class Data:
         bg_K = problem.perm[:, 0] # intrinsic permeability # [np.max(problem.perm[:, 0])]
         homogeneous_perm = True if np.unique(bg_K).size == 1 else False
 
-        if homogeneous_perm is True and (np.asarray(mu).size == 1 and np.asarray(beta).size == 1):
+        if homogeneous_perm is True and (np.asarray(nu).size == 1 and np.asarray(beta).size == 1):
             beta *= np.sqrt(bg_K[0])
         else:
-            mu *= np.ones(bg_K.size)
+            nu *= np.ones(bg_K.size)
             beta *= np.sqrt(bg_K)
             zero *= np.ones(bg_K.size)
 
         # gather all law coefficients in one list
-        self.coeffs = [ [mu, zero], [mu, beta] ]
+        self.coeffs = [ [nu, zero], [nu, beta] ]
 
         # ranges to define regions (normalized by u_bar)
-        range_1 = lambda a: np.logical_and(a >= 0, a <= 1) # slow-speed region (Darcy)
-        range_2 = lambda a: a > 1 # high-speed region (Forchheimer)
+        range_1 = lambda a: np.logical_and(a >= 0, a <= 1) # slow-flux region (Darcy)
+        range_2 = lambda a: a > 1 # high-flux region (Forchheimer)
         self.ranges = [range_1, range_2]
 
     # ------------------------------------------------------------------------------#
 
     def get_perm_factor(self, region=None):
 
-        # compute speed-dependent perm factor by convolution (region is None) or region-wise
+        # compute flux-dependent perm factor by convolution (region is None) or region-wise
         if region is None: # use convolution
             self.region = None
 
@@ -69,10 +69,10 @@ class Data:
             return np.zeros(sd.num_cells)
 
         # cell flux
-        flux = d[pp.STATE][flow_solver.P0_flux]
+        flux = d[pp.TIME_STEP_SOLUTIONS][flow_solver.P0_flux][0]
         flux_norm2 = np.square(np.linalg.norm(flux, axis=0))
 
-        # retrieve speed-dependent perm factor and multiply it by intrinsic permeability
+        # retrieve flux-dependent perm factor and multiply it by intrinsic permeability
         if self.region is None:
             k = self.k_adapt(flux_norm2)
         else:

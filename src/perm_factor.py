@@ -14,7 +14,7 @@ def perm_factor(coeffs, ranges=None, region=None):
         num_cells = np.asarray(coeffs[0]).ndim * np.asarray(coeffs[0]).size
         law_order = len(coeffs) # highest order of law (darcy is 1 and forch is 2)
 
-        # compute and return speed-dependent permeability factor
+        # compute and return flux-dependent permeability factor
         K_inv = inv_perm(coeffs, region, num_cells, law_order)
         return lambda a: K_fct(a, K_inv, num_cells)
 
@@ -53,7 +53,7 @@ def convolution_terms(coeffs, ranges, num_cells, law_order, num_regions):
     ranges_all = ranges.copy()
     coeffs_all = coeffs.copy()
 
-    # add artificial negative-speed region (for convolution)
+    # add artificial negative-flux region (for convolution)
     range_0 = lambda a: a < 0
     ranges_all = [range_0] + ranges
 
@@ -69,7 +69,7 @@ def convolution_terms(coeffs, ranges, num_cells, law_order, num_regions):
         coeffs_cst += coeffs_all[i][0]
         coeffs_all[i+1] = [coeffs_cst] + coeffs_all[i+1]
 
-    # add coefficients of negative-speed region (region 0)
+    # add coefficients of negative-flux region (region 0)
     coeffs_0 = [init_zero for j in range(law_order+1)]
     coeffs_0[0] = coeffs_all[0][0]
     coeffs_0[1] = coeffs_all[0][1]
@@ -104,7 +104,7 @@ def convolution(coeffs, ranges, powers, num_cells, law_order, num_regions):
     # extra parameters
     dx = np.abs(b[1]-b[0]) # step for convolution
     idx0 = int(0.5*(n_conv+1)-1) # index such that b[idx0] = 0
-    b_pos = b[idx0:]/2 # interpolate, plot and get errors only over positive speeds
+    b_pos = b[idx0:]/2 # interpolate, plot and get errors only over positive fluxes
 
     if num_cells == 0: # law is not space_dependent
         # define term to convolve (primitive of law), Phi

@@ -11,7 +11,7 @@ class Parameters:
         self.length_y = 10            # box y-axis size [m]
 
         # physical parameters
-        self.mu = 0.001 # fluid's viscosity [Pa.s]
+        self.mu = 0.001 # fluid's dynamic viscosity [Pa.s]
         self.rho = 998. # fluid's density [kg/m3]
         self.c_F = 0.55 # Forchheimer coefficient [-]
         self.g = 9.81   # gravity [m/s2]
@@ -79,14 +79,15 @@ class Parameters:
 
     def _compute_and_print(self):
         # compute parameters from given ones above
-        self.Fo_c = self.E/(1-self.E)                     # critical Forchheimer number [-]
-        self.beta = self.c_F*self.rho                     # Forchheimer drag coefficient [kg/m3]
+        self.nu = self.mu / self.rho                        # fluid's kinematic viscosity [m2/s]
+        self.Fo_c = self.E / (1-self.E)                     # critical Forchheimer number [-]
+        self.beta = self.c_F / self.rho                     # Forchheimer drag coefficient [m3/kg]
 
         # print newly computed parameters
         print("---- Print the parameters ----")
         print("mu =", round(self.mu, 5), "[Pa.s]", \
               " rho =", round(self.rho, 5), "[kg/m3]", \
-              " influx =", round(self.influx, 5),"[kg/m2/s]",
+              " influx =", round(self.influx, 5),"[kg/m2/s]", \
               " Fo_c =", round(self.Fo_c, 5), "[-]")
 
         num_lenses = len(self.lenses)
