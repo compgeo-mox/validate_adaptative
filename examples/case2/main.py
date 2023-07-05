@@ -187,7 +187,7 @@ if __name__ == "__main__":
             print("Pressure", err_p_forch)
             print("Flux", err_q_forch)
 
-            
+
         print(" ", "---- Compute global errors with respect to the Forchheimer scheme ----", \
               sep="\n")
 
