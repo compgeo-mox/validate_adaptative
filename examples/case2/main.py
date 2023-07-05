@@ -141,7 +141,8 @@ if __name__ == "__main__":
     compute_errors = True;
 
     if compute_errors:
-        print(" ", "---- Compute errors with respect to the Forchheimer scheme ----", sep="\n")
+        print(" ", "---- Compute region-wise errors with respect to the Forchheimer scheme ----", \
+              sep="\n")
         region = np.loadtxt("./regions/region").astype(bool)
         p_ref = p_forch
         q_ref = q_forch
@@ -154,7 +155,7 @@ if __name__ == "__main__":
             norm_scalar = lambda x: np.sqrt(x @ mass @ x)
             norm_vector = lambda x: np.sqrt(np.linalg.norm(x, axis=0) @ mass @ np.linalg.norm(x, axis=0))
 
-            # we assume to be the adaptive solution as the reference
+            # we assume the Forchheimer solution to be the reference
             norm_p_ref = norm_scalar(p_ref[pos])
             norm_q_ref = norm_vector(q_ref[:, pos])
 
@@ -185,3 +186,45 @@ if __name__ == "__main__":
             print("Errors for the Forchheimer scheme:")
             print("Pressure", err_p_forch)
             print("Flux", err_q_forch)
+
+            
+        print(" ", "---- Compute global errors with respect to the Forchheimer scheme ----", \
+              sep="\n")
+
+        # mass matrix
+        mass = sps.diags([sd.cell_volumes for sd in mdg.subdomains()], [0])
+
+        norm_scalar = lambda x: np.sqrt(x @ mass @ x)
+        norm_vector = lambda x: np.sqrt(np.linalg.norm(x, axis=0) @ mass @ np.linalg.norm(x, axis=0))
+
+        # we assume the Forchheimer solution to be the reference
+        norm_p_ref = norm_scalar(p_ref)
+        norm_q_ref = norm_vector(q_ref)
+
+        # let's compute the errors
+        err_p_hete = norm_scalar(p_ref - p_hete) / norm_p_ref
+        err_q_hete = norm_vector(q_ref - q_hete) / norm_q_ref
+
+        err_p_darcy = norm_scalar(p_ref - p_darcy) / norm_p_ref
+        err_q_darcy = norm_vector(q_ref - q_darcy) / norm_q_ref
+
+        err_p_forch = norm_scalar(p_ref - p_forch) / norm_p_ref
+        err_q_forch = norm_vector(q_ref - q_forch) / norm_q_ref
+
+        print("------")
+        print("In whole domain")
+        print("------")
+
+        print("Errors for the heterogeneous scheme:")
+        print("Pressure", err_p_hete)
+        print("Flux", err_q_hete)
+        print("------")
+
+        print("Errors for the Darcy scheme:")
+        print("Pressure", err_p_darcy)
+        print("Flux", err_q_darcy)
+        print("------")
+
+        print("Errors for the Forchheimer scheme:")
+        print("Pressure", err_p_forch)
+        print("Flux", err_q_forch)
