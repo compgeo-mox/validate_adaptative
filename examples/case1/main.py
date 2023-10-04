@@ -1,16 +1,20 @@
 import numpy as np
 import porepy as pp
+import time
 import scipy.sparse as sps
 
 from problem import Problem
 from parameters import Parameters
 from data import Data
 
-import sys; sys.path.insert(0, "../../src/")
+import sys
+
+sys.path.insert(0, "../../src/")
 from flow import Flow
-import tags
+
+# import tags
 from exporter import write_network_pvd, make_file_name
-import time
+from compute_error import compute_error
 
 # ------------------------------------------------------------------------------#
 
@@ -28,11 +32,13 @@ def main(region, parameters, problem, data):
         folder_name = "./solutions/forch/"
 
     # variables to visualize
-    variable_to_export = [Flow.pressure, \
-                          Flow.P0_flux, \
-                          Flow.permeability, \
-                          Flow.P0_flux_norm, \
-                          Flow.region]
+    variable_to_export = [
+        Flow.pressure,
+        Flow.P0_flux,
+        Flow.permeability,
+        Flow.P0_flux_norm,
+        Flow.region,
+    ]
 
     # parameters for nonlinear solver
     max_iteration_non_linear = 100
@@ -113,7 +119,9 @@ def main(region, parameters, problem, data):
 
     for sd, d in problem.mdg.subdomains(return_data=True):
         if region is None:
-            np.savetxt("./regions/" + Flow.region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
+            np.savetxt(
+                "./regions/" + Flow.region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0]
+            )
         flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
         pressure = d[pp.TIME_STEP_SOLUTIONS][Flow.pressure][0]
 
@@ -123,9 +131,13 @@ def main(region, parameters, problem, data):
 # ------------------------------------------------------------------------------#
 
 if __name__ == "__main__":
-    parameters = Parameters()         # get parameters, print them and read porosity
-    problem = Problem(parameters)     # create the grid bucket and get intrinsic permeability
-    data = Data(parameters, problem)  # get data for computation of flux-dependent permeability
+    parameters = Parameters()  # get parameters, print them and read porosity
+    problem = Problem(
+        parameters
+    )  # create the grid bucket and get intrinsic permeability
+    data = Data(
+        parameters, problem
+    )  # get data for computation of flux-dependent permeability
 
     # run the various schemes
     print("", "---- Perform the adaptive scheme ----", sep="\n")
@@ -156,92 +168,6 @@ if __name__ == "__main__":
     compute_errors = True
 
     if compute_errors:
-        print(" ", "---- Compute region-wise errors with respect to the Forchheimer scheme ----", \
-              sep="\n")
-        region = np.loadtxt("./regions/region").astype(bool)
-        p_ref = p_forch
-        q_ref = q_forch
-
-        for reg in np.unique(region):
-            pos = region == reg
-            # mass matrix
-            mass = sps.diags([sd.cell_volumes[pos] for sd in mdg.subdomains()], [0])
-
-            norm_scalar = lambda x: np.sqrt(x @ mass @ x)
-            norm_vector = lambda x: np.sqrt(
-                np.linalg.norm(x, axis=0) @ mass @ np.linalg.norm(x, axis=0)
-            )
-
-            # we assume the Forchheimer solution to be the reference
-            norm_p_ref = norm_scalar(p_ref[pos])
-            norm_q_ref = norm_vector(q_ref[:, pos])
-
-            # let's compute the errors
-            err_p_hete = norm_scalar(p_ref[pos] - p_hete[pos]) / norm_p_ref
-            err_q_hete = norm_vector(q_ref[:, pos] - q_hete[:, pos]) / norm_q_ref
-
-            err_p_darcy = norm_scalar(p_ref[pos] - p_darcy[pos]) / norm_p_ref
-            err_q_darcy = norm_vector(q_ref[:, pos] - q_darcy[:, pos]) / norm_q_ref
-
-            err_p_forch = norm_scalar(p_ref[pos] - p_forch[pos]) / norm_p_ref
-            err_q_forch = norm_vector(q_ref[:, pos] - q_forch[:, pos]) / norm_q_ref
-
-            print("------")
-            print("In", {True: "Darcy", False: "Forchheimer"}[reg], "region")
-            print("------")
-
-            print("Errors for the heterogeneous scheme:")
-            print("Pressure", err_p_hete)
-            print("Flux", err_q_hete)
-            print("------")
-
-            print("Errors for the Darcy scheme:")
-            print("Pressure", err_p_darcy)
-            print("Flux", err_q_darcy)
-            print("------")
-
-            print("Errors for the Forchheimer scheme:")
-            print("Pressure", err_p_forch)
-            print("Flux", err_q_forch)
-
-
-        print(" ", "---- Compute global errors with respect to the Forchheimer scheme ----", \
-              sep="\n")
-
-        # mass matrix
-        mass = sps.diags([sd.cell_volumes for sd in mdg.subdomains()], [0])
-
-        norm_scalar = lambda x: np.sqrt(x @ mass @ x)
-        norm_vector = lambda x: np.sqrt(np.linalg.norm(x, axis=0) @ mass @ np.linalg.norm(x, axis=0))
-
-        # we assume the Forchheimer solution to be the reference
-        norm_p_ref = norm_scalar(p_ref)
-        norm_q_ref = norm_vector(q_ref)
-
-        # let's compute the errors
-        err_p_hete = norm_scalar(p_ref - p_hete) / norm_p_ref
-        err_q_hete = norm_vector(q_ref - q_hete) / norm_q_ref
-
-        err_p_darcy = norm_scalar(p_ref - p_darcy) / norm_p_ref
-        err_q_darcy = norm_vector(q_ref - q_darcy) / norm_q_ref
-
-        err_p_forch = norm_scalar(p_ref - p_forch) / norm_p_ref
-        err_q_forch = norm_vector(q_ref - q_forch) / norm_q_ref
-
-        print("------")
-        print("In whole domain")
-        print("------")
-
-        print("Errors for the heterogeneous scheme:")
-        print("Pressure", err_p_hete)
-        print("Flux", err_q_hete)
-        print("------")
-
-        print("Errors for the Darcy scheme:")
-        print("Pressure", err_p_darcy)
-        print("Flux", err_q_darcy)
-        print("------")
-
-        print("Errors for the Forchheimer scheme:")
-        print("Pressure", err_p_forch)
-        print("Flux", err_q_forch)
+        p = (p_darcy, p_forch, p_hete)
+        q = (q_darcy, q_forch, q_hete)
+        compute_error(mdg, p, q)
