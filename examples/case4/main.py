@@ -15,6 +15,7 @@ sys.path.insert(0, "src/")
 from flow import Flow
 from exporter import write_network_pvd
 from solver_codim2 import MVEMCodim2
+from compute_error import compute_error
 
 # ------------------------------------------------------------------------------#
 
@@ -49,10 +50,10 @@ def add_wells(mdg, domain, well_coords, well_num_cells, tol):
 
 def main(region):
     parameters = Parameters(
-        layers=np.arange(20) + 35, perm_folder="examples/case1/spe10_perm/"
+        layers=np.arange(25), perm_folder="examples/case1/spe10_perm/"
     )  # get parameters, print them and read porosity
     problem = Problem(
-        parameters, pos_x=np.arange(10), pos_y=np.arange(10)
+        parameters, pos_x=np.arange(20), pos_y=np.arange(20)
     )  # create the grid bucket and get intrinsic permeability
     data = Data(
         parameters, problem
@@ -60,10 +61,6 @@ def main(region):
 
     # tolerance in the computation
     tol = 1e-10
-
-    # assign the flag for the low permeable fractures
-    epsilon = 1e-2
-    u_bar = 1e-7  # 1 0.5 0.25 0.125 0.0625 0.03125
 
     file_name = "case4"
     folder_name = "examples/case4/fixed/"
@@ -211,8 +208,6 @@ def main(region):
 
 # ------------------------------------------------------------------------------#
 
-# DA FARE RITORNARE I VALORI PRESSIONE E FLUSSO IN MODO DA CONFRONTARLI
-
 if __name__ == "__main__":
     print("Perform the adaptative scheme")
     q_adapt, p_adapt = main(None)
@@ -222,3 +217,9 @@ if __name__ == "__main__":
     # q_darcy, p_darcy = main("examples/case4/region_darcy")
     # print("Perform the forshheimer-based scheme")
     # q_forsh, p_forsh = main("region_forsh")
+
+    compute_errors = False
+    if compute_errors:
+        p = (p_darcy, p_forch, p_hete)
+        q = (q_darcy, q_forch, q_hete)
+        compute_error(mdg, p, q)

@@ -4,7 +4,7 @@ from functools import partial
 
 import sys
 
-sys.path.insert(0, "src/")
+sys.path.insert(0, "./src/")
 from perm_factor import *
 
 
@@ -36,7 +36,7 @@ class Data:
             zero *= np.ones(bg_K.size)
 
         # gather all law coefficients in one list
-        self.coeffs = [ [nu, zero], [nu, beta] ]
+        self.coeffs = [[nu, zero], [nu, beta]]
 
         # ranges to define regions (normalized by u_bar)
         range_1 = lambda a: np.logical_and(a >= 0, a <= 1)  # slow-speed region (Darcy)
