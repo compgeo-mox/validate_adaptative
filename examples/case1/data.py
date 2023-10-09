@@ -98,13 +98,14 @@ class Data:
 
     def source(self, sd, d, flow_solver):
         wells = self.parameters.wells
+        u_bar = self.problem.u_bar
 
         vals = np.zeros(sd.num_cells)
         for well in wells:
             well_cell = well["cell_id"]
             vals[well_cell] = well["val"]
 
-        return vals
+        return vals/u_bar
 
     # ------------------------------------------------------------------------------#
 

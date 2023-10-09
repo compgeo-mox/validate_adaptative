@@ -114,13 +114,14 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def _compute_threshold_flux(self):
-        mu = np.min(np.asarray(self.parameters.mu))
-        rho = np.max(np.asarray(self.parameters.rho))
-        beta = np.max(np.asarray(self.parameters.beta))
+        mu = self.parameters.mu
+        rho = self.parameters.rho
+        beta = self.parameters.beta
         Fo_c = self.parameters.Fo_c
-        K = np.max(self.perm[:, 0])
+        K = self.perm[:, 0]
+        factor = np.min(np.asarray(mu/(rho*beta*np.sqrt(K))))
 
-        self.u_bar = mu / (rho * beta * np.sqrt(K)) * Fo_c  # threshold speed [kg/m2/s]
+        self.u_bar = factor * Fo_c  # threshold speed [kg/m2/s]
 
         print("u_bar =", round(self.u_bar, 5), "[kg/m2/s]")
 
