@@ -9,10 +9,11 @@ from perm_factor import *
 
 
 class Data:
-    def __init__(self, parameters, problem, tol=1e-6):
+    def __init__(self, parameters, problem, folder, tol=1e-6):
         self.problem = problem
         self.parameters = parameters
         self.tol = tol
+        self.folder = folder
 
         # get necessary parameters
         u_bar = self.problem.u_bar
@@ -69,7 +70,7 @@ class Data:
             k_adapt = perm_factor(self.coeffs, ranges=self.ranges)
             self.k_adapt = lambda flux2: k_adapt(flux2)
         else:  # use region file name
-            self.region = np.loadtxt("./regions/" + region).astype(bool)
+            self.region = np.loadtxt(self.folder + "./regions/" + region).astype(bool)
 
             # region zero is Forchheimer, region one is Darcy
             darcy_region = self.region
@@ -135,13 +136,16 @@ class Data:
         g = self.parameters.g
         h = self.parameters.layer_depth
 
+        val_well = 150
+        print(sd.dim, sd.well_num)
         if sd.dim == 1 and sd.well_num > -1:
             b_faces = sd.tags["domain_boundary_faces"].nonzero()[0]
-            labels = np.array(["dir"])
-            if sd.well_num == 2 or sd.well_num == 0 or sd.well_num == 4:
-                bc_val[b_faces] = 5e7
+            labels = np.array(["neu"])
+            print(sd.well_num, sd.cell_faces.todense())
+            if sd.well_num == 4:
+                bc_val[b_faces] = val_well
             else:
-                bc_val[b_faces] = 1e7
+                bc_val[b_faces] = -val_well / 4
 
         else:
             b_faces = sd.tags["domain_boundary_faces"].nonzero()[0]
