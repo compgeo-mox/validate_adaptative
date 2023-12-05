@@ -9,7 +9,7 @@ from data import Data
 
 import sys
 
-sys.path.insert(0, "../../src/")
+sys.path.insert(0, "./src/")
 from flow import Flow
 
 # import tags
@@ -19,17 +19,17 @@ from compute_error import compute_error
 # ------------------------------------------------------------------------------#
 
 
-def main(region, parameters, problem, data):
+def main(region, parameters, problem, data, out_folder):
     # set files and folders to work with
     file_name = "case1"
     if region == None:
-        folder_name = "./solutions/adaptive/"
+        folder_name = out_folder + "./solutions/adaptive/"
     elif region == "region":
-        folder_name = "./solutions/heterogeneous/"
+        folder_name = out_folder + "./solutions/heterogeneous/"
     elif region == "region_darcy":
-        folder_name = "./solutions/darcy/"
+        folder_name = out_folder + "./solutions/darcy/"
     elif region == "region_forch":
-        folder_name = "./solutions/forch/"
+        folder_name = out_folder + "./solutions/forch/"
 
     # variables to visualize
     variable_to_export = [
@@ -71,7 +71,14 @@ def main(region, parameters, problem, data):
         discr.set_data(data.get())
 
         A, b = discr.matrix_rhs()
-        x = sps.linalg.spsolve(A, b)
+
+        vect = np.zeros((1, A.shape[0]))
+        num_cells = problem.mdg.num_subdomain_cells()
+        vect[0, -num_cells:] = 1
+        A = sps.bmat([[A, vect.T], [vect, None]], format="csc")
+        b = np.concatenate((b, [0]))
+
+        x = sps.linalg.spsolve(A, b)[:-1]
         discr.extract(x, u_bar=1)  # u_bar=1 here because fluxes are normalized by u_bar
 
         # compute the exit condition
@@ -119,9 +126,8 @@ def main(region, parameters, problem, data):
 
     for sd, d in problem.mdg.subdomains(return_data=True):
         if region is None:
-            np.savetxt(
-                "./regions/" + Flow.region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0]
-            )
+            file_name_region = out_folder + "./regions/" + Flow.region
+            np.savetxt(file_name_region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
         flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
         pressure = d[pp.TIME_STEP_SOLUTIONS][Flow.pressure][0]
 
@@ -130,37 +136,40 @@ def main(region, parameters, problem, data):
 
 # ------------------------------------------------------------------------------#
 
-if __name__ == "__main__":
-    parameters = Parameters()  # get parameters, print them and read porosity
+
+def run_test(layer, val_well, main_folder, out_folder):
+    parameters = Parameters(
+        main_folder, val_well, layers=layer
+    )  # get parameters, print them and read porosity
     problem = Problem(
         parameters
     )  # create the grid bucket and get intrinsic permeability
     data = Data(
-        parameters, problem
+        parameters, problem, out_folder
     )  # get data for computation of flux-dependent permeability
 
     # run the various schemes
     print("", "---- Perform the adaptive scheme ----", sep="\n")
     start = time.time()
-    q_adapt, p_adapt, mdg = main(None, parameters, problem, data)
+    q_adapt, p_adapt, mdg = main(None, parameters, problem, data, out_folder)
     end = time.time()
     print("run time =", end - start, "[s]")
 
     print("", "---- Perform the heterogeneous scheme ----", sep="\n")
     start = time.time()
-    q_hete, p_hete, _ = main("region", parameters, problem, data)
+    q_hete, p_hete, _ = main("region", parameters, problem, data, out_folder)
     end = time.time()
     print("run time =", end - start, "[s]")
 
     print("", "---- Perform the Darcy scheme ----", sep="\n")
     start = time.time()
-    q_darcy, p_darcy, _ = main("region_darcy", parameters, problem, data)
+    q_darcy, p_darcy, _ = main("region_darcy", parameters, problem, data, out_folder)
     end = time.time()
     print("run time =", end - start, "[s]")
 
     print("", "---- Perform the Forchheimer scheme ----", sep="\n")
     start = time.time()
-    q_forch, p_forch, _ = main("region_forch", parameters, problem, data)
+    q_forch, p_forch, _ = main("region_forch", parameters, problem, data, out_folder)
     end = time.time()
     print("run time =", end - start, "[s]")
 
@@ -170,4 +179,16 @@ if __name__ == "__main__":
     if compute_errors:
         p = (p_darcy, p_forch, p_hete)
         q = (q_darcy, q_forch, q_hete)
-        compute_error(mdg, p, q)
+        compute_error(mdg, p, q, folder=out_folder)
+
+
+if __name__ == "__main__":
+    main_folder = "./examples/case1/"
+
+    layers = [4, 35]
+    vals_well = [50, 150, 300]
+
+    for l in layers:
+        for v in vals_well:
+            folder = "case_l_" + str(l) + "_v_" + str(v) + "/"
+            run_test(l, v, main_folder, main_folder + folder)

@@ -3,7 +3,7 @@ import porepy as pp
 
 import sys
 
-sys.path.insert(0, "../../src/")
+sys.path.insert(0, "./src/")
 # import tags
 from perm_factor import *
 
@@ -11,10 +11,11 @@ from perm_factor import *
 
 
 class Data:
-    def __init__(self, parameters, problem, tol=1e-6):
+    def __init__(self, parameters, problem, folder, tol=1e-6):
         self.problem = problem
         self.parameters = parameters
         self.tol = tol
+        self.folder = folder
 
         # get necessary parameters
         u_bar = self.problem.u_bar
@@ -56,7 +57,7 @@ class Data:
             k_adapt = perm_factor(self.coeffs, ranges=self.ranges)
             self.k_adapt = lambda flux2: k_adapt(flux2)
         else:  # use region file name
-            self.region = np.loadtxt("./regions/" + region).astype(bool)
+            self.region = np.loadtxt(self.folder + "./regions/" + region).astype(bool)
 
             # region zero is Forchheimer, region one is Darcy
             darcy_region = self.region
@@ -112,7 +113,7 @@ class Data:
             well_cell = well["cell_id"]
             vals[well_cell] = well["val"]
 
-        return vals/u_bar
+        return vals / u_bar
 
     # ------------------------------------------------------------------------------#
 
@@ -138,10 +139,10 @@ class Data:
         h = self.parameters.layer_depth
 
         # define the labels and values for the boundary faces
-        labels = np.array(["dir"] * b_faces.size)
+        labels = np.array(["neu"] * b_faces.size)
         bc_val = np.zeros(sd.num_faces)
 
-        bc_val[b_faces] = atm_pressure + rho * g * h  # hydrostatic pressure all around
+        #bc_val[b_faces] = atm_pressure + rho * g * h  # hydrostatic pressure all around
 
         return labels, bc_val
 
