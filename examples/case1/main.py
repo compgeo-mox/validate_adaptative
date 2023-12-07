@@ -18,18 +18,20 @@ from compute_error import compute_error
 
 # ------------------------------------------------------------------------------#
 
+main_folder = "../case1/"
+
 
 def main(region, parameters, problem, data):
     # set files and folders to work with
     file_name = "case1"
     if region == None:
-        folder_name = "./solutions/adaptive/"
+        folder_name = main_folder + "solutions/adaptive/"
     elif region == "region":
-        folder_name = "./solutions/heterogeneous/"
+        folder_name = main_folder + "solutions/heterogeneous/"
     elif region == "region_darcy":
-        folder_name = "./solutions/darcy/"
+        folder_name = main_folder + "solutions/darcy/"
     elif region == "region_forch":
-        folder_name = "./solutions/forch/"
+        folder_name = main_folder + "solutions/forch/"
 
     # variables to visualize
     variable_to_export = [
@@ -56,17 +58,13 @@ def main(region, parameters, problem, data):
         pp.set_solution_values(Flow.P0_flux + "_old", flux.copy(), d, 0)
 
     variable_to_export += problem.save_perm()  # add intrinsic permeability to visualize
-    variable_to_export += (
-        problem.save_forch_vars()
-    )  # add Forchheimer number and other vars
+    variable_to_export += (problem.save_forch_vars())  # add Forchheimer number and other vars
 
     # non-linear problem solution with a fixed point strategy
     err_non_linear = max_err_non_linear + 1
     iteration_non_linear = 0
-    while (
-        err_non_linear > max_err_non_linear
-        and iteration_non_linear < max_iteration_non_linear
-    ):
+    while (err_non_linear > max_err_non_linear
+           and iteration_non_linear < max_iteration_non_linear):
         # solve the linearized problem
         discr.set_data(data.get())
 
@@ -119,9 +117,8 @@ def main(region, parameters, problem, data):
 
     for sd, d in problem.mdg.subdomains(return_data=True):
         if region is None:
-            np.savetxt(
-                "./regions/" + Flow.region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0]
-            )
+            file_name_region = main_folder + "./regions/" + Flow.region
+            np.savetxt(file_name_region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
         flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
         pressure = d[pp.TIME_STEP_SOLUTIONS][Flow.pressure][0]
 
@@ -131,13 +128,9 @@ def main(region, parameters, problem, data):
 # ------------------------------------------------------------------------------#
 
 if __name__ == "__main__":
-    parameters = Parameters()  # get parameters, print them and read porosity
-    problem = Problem(
-        parameters
-    )  # create the grid bucket and get intrinsic permeability
-    data = Data(
-        parameters, problem
-    )  # get data for computation of flux-dependent permeability
+    parameters = Parameters(main_folder)  # get parameters, print them and read porosity
+    problem = Problem(parameters)  # create the grid bucket and get intrinsic permeability
+    data = Data(parameters, problem, main_folder)  # get data for computation of flux-dependent permeability
 
     # run the various schemes
     print("", "---- Perform the adaptive scheme ----", sep="\n")
@@ -170,4 +163,4 @@ if __name__ == "__main__":
     if compute_errors:
         p = (p_darcy, p_forch, p_hete)
         q = (q_darcy, q_forch, q_hete)
-        compute_error(mdg, p, q)
+        compute_error(mdg, *p, *q, folder=main_folder)

@@ -1,23 +1,26 @@
 import numpy as np
 import porepy as pp
+import time
 import scipy.sparse as sps
 
 from data import Data
 import sys
 
-sys.path.insert(0, "examples/case1/")
+sys.path.insert(0, "../case1/")
 from problem import Problem
 from parameters import Parameters
 
 import sys
 
-sys.path.insert(0, "src/")
+sys.path.insert(0, "../../src/")
 from flow import Flow
 from exporter import write_network_pvd
 from solver_codim2 import MVEMCodim2
 from compute_error import compute_error
 
 # ------------------------------------------------------------------------------#
+
+main_folder = "../case4/"
 
 
 def add_wells(mdg, domain, well_coords, well_num_cells, tol):
@@ -29,7 +32,9 @@ def add_wells(mdg, domain, well_coords, well_num_cells, tol):
     mesh_size = np.amin(wells_length / well_num_cells)
 
     # create the wells grids
-    wells_set = pp.WellNetwork3d(domain, wells, parameters={"mesh_size": mesh_size})
+    wells_set = pp.WellNetwork3d(
+        domain, wells, parameters={"mesh_size": mesh_size}, tol=tol
+    )
 
     # add the wells to the MixedDimensionalGrid
     wells_set.mesh(mdg)
@@ -48,22 +53,21 @@ def add_wells(mdg, domain, well_coords, well_num_cells, tol):
     return mdg
 
 
-def main(region):
-    parameters = Parameters(
-        layers=np.arange(25), perm_folder="examples/case1/spe10_perm/"
-    )  # get parameters, print them and read porosity
-    problem = Problem(
-        parameters, pos_x=np.arange(20), pos_y=np.arange(20)
-    )  # create the grid bucket and get intrinsic permeability
-    data = Data(
-        parameters, problem
-    )  # get data for computation of speed-dependent permeability
-
+def main(region, parameters, problem, data):
     # tolerance in the computation
-    tol = 1e-10
+    tol = 1e-4
 
+    # set files and folders to work with
     file_name = "case4"
-    folder_name = "examples/case4/fixed/"
+    if region == None:
+        folder_name = main_folder + "solutions/adaptive/"
+    elif region == "region":
+        folder_name = main_folder + "solutions/heterogeneous/"
+    elif region == "region_darcy":
+        folder_name = main_folder + "solutions/darcy/"
+    elif region == "region_forch":
+        folder_name = main_folder + "solutions/forch/"
+
     variable_to_export = [
         Flow.pressure,
         Flow.P0_flux,
@@ -141,7 +145,8 @@ def main(region):
         pp.set_solution_values(Flow.P0_flux, flux, d, 0)
         pp.set_solution_values(Flow.P0_flux + "_old", flux.copy(), d, 0)
 
-    variable_to_export += problem.save_perm()
+    variable_to_export += problem.save_perm()  # add intrinsic permeability to visualize
+    variable_to_export += (problem.save_forch_vars())  # add Forchheimer number and other vars
 
     # non-linear problem solution with a fixed point strategy
     err_non_linear = max_err_non_linear + 1
@@ -154,7 +159,17 @@ def main(region):
         discr.set_data(data.get())
 
         A, b = discr.matrix_rhs()
-        x = sps.linalg.spsolve(A, b)
+
+        vect = np.zeros((1, A.shape[0]))
+        num_faces = problem.mdg.subdomains(dim=3)[0].num_faces
+        num_cells = problem.mdg.subdomains(dim=3)[0].num_cells
+
+        vect[0, num_faces : (num_faces + num_cells)] = 1
+        A = sps.bmat([[A, vect.T], [vect, None]], format="csc")
+        b = np.concatenate((b, [0]))
+
+        x = sps.linalg.spsolve(A, b)[:-1]
+
         discr.extract(x, u_bar=1)
 
         # compute the exit condition
@@ -182,6 +197,12 @@ def main(region):
             err_non_linear / norm_flux_old if norm_flux_old != 0 else err_non_linear
         )
 
+        # save new Forchheimer number
+        for sd, d in problem.mdg.subdomains(return_data=True):
+            if sd.dim != 1 or sd.well_num <= -1:
+                flux_forch = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
+                problem.save_forch_vars(flux=flux_forch)
+
         # exporter
         save = pp.Exporter(problem.mdg, "sol_" + file_name, folder_name=folder_name)
         save.write_vtu(variable_to_export, time_step=iteration_non_linear)
@@ -198,28 +219,66 @@ def main(region):
     write_network_pvd(file_name, folder_name, np.arange(iteration_non_linear))
 
     for sd, d in problem.mdg.subdomains(return_data=True):
-        if region is None:
-            np.savetxt(Flow.region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
-        flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
-        pressure = d[pp.TIME_STEP_SOLUTIONS][Flow.pressure][0]
+        if sd.dim != 1 or sd.well_num <= -1:
+            if region is None:
+                file_name_region = main_folder + "./regions/" + Flow.region
+                np.savetxt(file_name_region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
+            flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
+            pressure = d[pp.TIME_STEP_SOLUTIONS][Flow.pressure][0]
 
-    return flux, pressure
+    return flux, pressure, problem.mdg
 
 
 # ------------------------------------------------------------------------------#
 
-if __name__ == "__main__":
-    print("Perform the adaptative scheme")
-    q_adapt, p_adapt = main(None)
-    # print("Perform the heterogeneous scheme")
-    # q_hete, p_hete = main("region")
-    # print("Perform the darcy-based scheme")
-    # q_darcy, p_darcy = main("examples/case4/region_darcy")
-    # print("Perform the forshheimer-based scheme")
-    # q_forsh, p_forsh = main("region_forsh")
 
-    compute_errors = False
+def run_test():
+    parameters = Parameters(main_folder, val_well=50, layers=np.arange(7)  # 35
+    )  # get parameters, print them and read porosity
+    problem = Problem(
+        parameters,
+        pos_x=np.arange(10),  # + 15,
+        pos_y=np.arange(20),  # + 40  # 20 20
+    )  # create the grid bucket and get intrinsic permeability
+    data = Data(
+        parameters, problem, main_folder
+    )  # get data for computation of speed-dependent permeability
+
+    # run the various schemes
+    print("", "---- Perform the adaptive scheme ----", sep="\n")
+    start = time.time()
+    q_adapt, p_adapt, mdg = main(None, parameters, problem, data)
+    end = time.time()
+    print("run time =", end - start, "[s]")
+
+    print("", "---- Perform the heterogeneous scheme ----", sep="\n")
+    start = time.time()
+    q_hete, p_hete, _ = main("region", parameters, problem, data)
+    end = time.time()
+    print("run time =", end - start, "[s]")
+
+    print("", "---- Perform the Darcy scheme ----", sep="\n")
+    start = time.time()
+    q_darcy, p_darcy, _ = main("region_darcy", parameters, problem, data)
+    end = time.time()
+    print("run time =", end - start, "[s]")
+
+    print("", "---- Perform the Forchheimer scheme ----", sep="\n")
+    start = time.time()
+    q_forch, p_forch, _ = main("region_forch", parameters, problem, data)
+    end = time.time()
+    print("run time =", end - start, "[s]")
+
+    # compute the errors with respect to reference scheme (Forchheimer)
+    compute_errors = True
+
+    print(p_forch)
+
     if compute_errors:
         p = (p_darcy, p_forch, p_hete)
         q = (q_darcy, q_forch, q_hete)
-        compute_error(mdg, p, q)
+        compute_error(mdg, *p, *q, folder=main_folder)
+
+
+if __name__ == "__main__":
+    run_test()

@@ -4,8 +4,11 @@ from functools import partial
 
 import sys
 
-sys.path.insert(0, "./src/")
+sys.path.insert(0, "../../src/")
 from perm_factor import *
+from weighted_norm import *
+
+# ------------------------------------------------------------------------------#
 
 
 class Data:
@@ -16,27 +19,29 @@ class Data:
 
         # get necessary parameters
         u_bar = self.problem.u_bar
-        nu = self.parameters.nu * u_bar  # multiply by u_bar for normalization
-        beta = self.parameters.beta * np.square(u_bar)  # idem
+        m = self.parameters.m
+        nu = self.parameters.nu
+        alpha = self.parameters.nu * u_bar  # multiply by u_bar for normalization
+        beta = self.parameters.c_F * np.power(u_bar, m)  # idem
         zero = 0.0  # to be put as second-order term in Darcy region
 
         # convert drag coefficients to arrays if intrinsic permeability is heterogeneous
-        bg_K = problem.perm[
-            :, 0
-        ]  # intrinsic permeability # [np.max(problem.perm[:, 0])]
-        homogeneous_perm = True if np.unique(bg_K).size == 1 else False
+        mu = self.parameters.mu
+        kappa = problem.kappa  # intrinsic permeability # [np.max(problem.perm[:, 0])]
+        homogeneous_perm = True if np.unique(kappa).size == 1 else False
 
-        if homogeneous_perm is True and (
-            np.asarray(nu).size == 1 and np.asarray(beta).size == 1
-        ):
-            beta *= np.sqrt(bg_K[0])
+        if (homogeneous_perm is True 
+            and (np.asarray(alpha).size == 1 and np.asarray(beta).size == 1)):
+            beta *= nu * np.power(kappa[0]/mu, m-1)
         else:
-            nu *= np.ones(bg_K.size)
-            beta *= np.sqrt(bg_K)
-            zero *= np.ones(bg_K.size)
+            alpha *= np.ones(kappa.size)
+            beta *= nu * np.power(kappa/mu, m-1)
+            zero *= np.ones(kappa.size)
 
         # gather all law coefficients in one list
-        self.coeffs = [[nu, zero], [nu, beta]]
+        M = int(np.floor(m))
+        self.coeffs = [[alpha] + [zero for j in range(1, M)], 
+                       [alpha] + [zero for j in range(1, M - 1)] + [beta]]
 
         # ranges to define regions (normalized by u_bar)
         range_1 = lambda a: np.logical_and(a >= 0, a <= 1)  # slow-speed region (Darcy)
@@ -62,11 +67,12 @@ class Data:
 
     def get_perm_factor(self, region=None):
         # compute speed-dependent perm factor by convolution (region is None) or region-wise
+        m = self.parameters.m
         if region is None:  # use convolution
             self.region = None
 
             # adaptive convolution scheme
-            k_adapt = perm_factor(self.coeffs, ranges=self.ranges)
+            k_adapt = perm_factor(self.coeffs, m, ranges=self.ranges)
             self.k_adapt = lambda flux2: k_adapt(flux2)
         else:  # use region file name
             self.region = np.loadtxt("./regions/" + region).astype(bool)
@@ -74,8 +80,8 @@ class Data:
             # region zero is Forchheimer, region one is Darcy
             darcy_region = self.region
             forch_region = np.logical_not(self.region)
-            k_darcy = perm_factor(self.coeffs[0], region=darcy_region)
-            k_forch = perm_factor(self.coeffs[1], region=forch_region)
+            k_darcy = perm_factor(self.coeffs[0], m, region=darcy_region)
+            k_forch = perm_factor(self.coeffs[1], m, region=forch_region)
             self.k_darcy = lambda flux2: k_darcy(flux2)
             self.k_forch = lambda flux2: k_forch(flux2)
 
@@ -87,16 +93,12 @@ class Data:
             return np.zeros(sd.num_cells)
 
         if sd.dim == 1 and sd.well_num > -1:
-            return (
-                np.pi
-                * np.square(self.well_radius)
-                * np.ones(sd.num_cells)
-                * self.well_perm
-            )
-
+            k = np.pi * np.square(self.well_radius) * np.ones(sd.num_cells) * self.well_perm
+            return [k]
+            
         # cell flux
         flux = d[pp.TIME_STEP_SOLUTIONS][flow_solver.P0_flux][0]
-        flux_norm2 = np.square(np.linalg.norm(flux, axis=0))
+        flux_norm2 = np.square(weighted_norm(flux, self.problem.perm, sd.dim))
 
         # retrieve speed-dependent perm factor and multiply it by intrinsic permeability
         if self.region is None:
@@ -109,7 +111,12 @@ class Data:
             k[darcy_region] = self.k_darcy(flux_norm2[darcy_region])
             k[forch_region] = self.k_forch(flux_norm2[forch_region])
 
-        return k * self.problem.perm[:, 0]  # multiply by intrinsic permeability
+        # return k multiplied by diagonal intrinsic permeability        
+        dim = self.problem.perm.shape[1]
+        K = [np.multiply(k, self.problem.perm[:, 0])]
+        for j in range(1, dim):
+            K.append(np.multiply(k, self.problem.perm[:, j]))
+        return K
 
     # ------------------------------------------------------------------------------#
 
@@ -148,5 +155,3 @@ class Data:
             labels = np.array(["neu"] * b_faces.size)
 
         return labels, bc_val
-
-    # ------------------------------------------------------------------------------#

@@ -8,8 +8,8 @@ from parameters import Parameters
 from data import Data
 
 import sys
-
 sys.path.insert(0, "../../src/")
+
 from flow import Flow
 
 # import tags
@@ -18,20 +18,20 @@ from compute_error import compute_error
 
 # ------------------------------------------------------------------------------#
 
-main_folder = "./examples/case2/"
+main_folder = "../case2/"
 
 
 def main(region, problem, data):
     # set files and folders to work with
     file_name = "case2"
     if region == None:
-        folder_name = main_folder + "./solutions/adaptive/"
+        folder_name = main_folder + "solutions/adaptive/"
     elif region == "region":
-        folder_name = main_folder + "./solutions/heterogeneous/"
+        folder_name = main_folder + "solutions/heterogeneous/"
     elif region == "region_darcy":
-        folder_name = main_folder + "./solutions/darcy/"
+        folder_name = main_folder + "solutions/darcy/"
     elif region == "region_forch":
-        folder_name = main_folder + "./solutions/forch/"
+        folder_name = main_folder + "solutions/forch/"
 
     # variables to visualize
     variable_to_export = [
@@ -58,17 +58,13 @@ def main(region, problem, data):
         pp.set_solution_values(Flow.P0_flux + "_old", flux.copy(), d, 0)
 
     variable_to_export += problem.save_perm()  # add intrinsic permeability to visualize
-    variable_to_export += (
-        problem.save_forch_vars()
-    )  # add Forchheimer number and other vars
+    variable_to_export += (problem.save_forch_vars())  # add Forchheimer number and other vars
 
     # non-linear problem solution with a fixed point strategy
     err_non_linear = max_err_non_linear + 1
     iteration_non_linear = 0
-    while (
-        err_non_linear > max_err_non_linear
-        and iteration_non_linear < max_iteration_non_linear
-    ):
+    while (err_non_linear > max_err_non_linear
+           and iteration_non_linear < max_iteration_non_linear):
         # solve the linearized problem
         discr.set_data(data.get())
 
@@ -132,13 +128,9 @@ def main(region, problem, data):
 # ------------------------------------------------------------------------------#
 
 if __name__ == "__main__":
-    parameters = Parameters(main_folder)  # get parameters, print them and read porosity
-    problem = Problem(
-        parameters
-    )  # create the grid bucket and get intrinsic permeability
-    data = Data(
-        parameters, problem, main_folder
-    )  # get data for computation of flux-dependent permeability
+    parameters = Parameters(main_folder, "network")  # get parameters, print them and read porosity
+    problem = Problem(parameters)  # create the grid bucket and get intrinsic permeability
+    data = Data(parameters, problem, main_folder)  # get data for computation of flux-dependent permeability
 
     # run the various schemes
     print("", "---- Perform the adaptive scheme ----", sep="\n")

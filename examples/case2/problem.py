@@ -1,6 +1,11 @@
 import numpy as np
 import porepy as pp
 
+import sys
+sys.path.insert(0, "../../src/")
+
+from weighted_norm import *
+
 # ------------------------------------------------------------------------------#
 
 class Problem(object):
@@ -98,13 +103,24 @@ class Problem(object):
 
     def _compute_threshold_flux(self):
         mu = self.parameters.mu
-        rho = self.parameters.rho
-        beta = self.parameters.beta
+        c_F = self.parameters.c_F
         Fo_c = self.parameters.Fo_c
-        K = self.perm[:, 0]
-        factor = np.min(np.asarray(mu/(rho*beta*np.sqrt(K))))
+        M = self.parameters.m - 1
 
-        self.u_bar = factor * Fo_c # threshold flux [kg/m2/s]
+        dim = self.sd.dim 
+        factor = 0
+        if dim > 0:
+            kappa = kappa_min = self.perm[:, 0]
+            for j in range(1, dim):
+                kappa = [k * l for k, l in zip(kappa, self.perm[:, j])]
+                kappa_min = [np.minimum(k, l) for k, l in zip(kappa_min, self.perm[:, j])]
+            self.kappa = np.asarray([np.power(k, 1/dim) for k in kappa])
+            self.kappa_min = np.asarray(kappa_min)
+            factor = np.min(np.asarray(
+                mu*np.sqrt(self.kappa_min)/(self.kappa*np.power(c_F, 1/M))
+            ))
+
+        self.u_bar = factor * np.power(Fo_c, 1/M) # threshold flux [kg/m2/s]
 
         print("u_bar =", round(self.u_bar, 5), "[kg/m2/s]")
 
@@ -136,7 +152,7 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def save_forch_vars(self, flux=None):
-        names = ["Forchheimer number", \
+        names = ["Forchheimer number", "upper Forchheimer number", \
                  "P0_darcy_flux_denormalized", "P0_darcy_flux_denormalized_norm", \
                  "P0_darcy_velocity_denormalized", "P0_darcy_velocity_denormalized_norm"]
 
@@ -146,13 +162,22 @@ class Problem(object):
         else: # flux is given: compute Forchheimer number and store it
             Fo_c = self.parameters.Fo_c
             rho = self.parameters.rho
+            M = self.parameters.m - 1
             u_bar = self.u_bar
-            for _, d in self.mdg.subdomains(return_data=True):
-                pp.set_solution_values(names[0], Fo_c * np.linalg.norm(flux, axis=0), d, 0)
-                pp.set_solution_values(names[1], flux * u_bar, d, 0)
-                pp.set_solution_values(names[2], np.linalg.norm(flux * u_bar, axis=0), d, 0)
-                pp.set_solution_values(names[3], flux/rho * u_bar, d, 0)
-                pp.set_solution_values(names[4], np.linalg.norm(flux/rho * u_bar, axis=0), d, 0)
+            for sd, d in self.mdg.subdomains(return_data=True):
+                pp.set_solution_values(names[0], 
+                                       Fo_c * np.power(self.kappa_min, M/2) * 
+                                       np.power(weighted_norm(flux, self.perm, sd.dim),
+                                                M), d, 0)
+                pp.set_solution_values(names[1], 
+                                       Fo_c * np.power(np.linalg.norm(flux, axis=0), 
+                                                       M), d, 0)
+                pp.set_solution_values(names[2], flux * u_bar, d, 0)
+                pp.set_solution_values(names[3], 
+                                       np.linalg.norm(flux * u_bar, axis=0), d, 0)
+                pp.set_solution_values(names[4], flux/rho * u_bar, d, 0)
+                pp.set_solution_values(names[5], 
+                                       np.linalg.norm(flux/rho * u_bar, axis=0), d, 0)
 
     # ------------------------------------------------------------------------------#
 

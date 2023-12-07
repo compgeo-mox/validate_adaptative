@@ -176,3 +176,6 @@ nbproject/
 *.mat
 *.py_o
 *.txt
+
+# Emacs files
+*.~undo-tree~
