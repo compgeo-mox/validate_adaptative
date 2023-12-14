@@ -5,11 +5,9 @@ import porepy as pp
 
 
 class Parameters:
-    def __init__(self, folder, val_well, layers=35, perm_folder="./spe10_perm/"):
+    def __init__(self, folder, val_well=50, layers=35):
         # layer
-        self.layers = np.sort(
-            np.atleast_1d(layers)
-        )  # layer of SPE10 case to be considered
+        self.layers = np.sort(np.atleast_1d(layers))  # layer of SPE10 case to be considered
         self.layer_depth = 21.336  # depth [m] of above layer
 
         # physical parameters
@@ -17,6 +15,7 @@ class Parameters:
         self.rho = 1025.0  # fluid's density [kg/m3]
         self.c_F = 0.55  # Forchheimer coefficient [-]
         self.g = 9.81  # gravity [m/s2]
+        self.m = 2 # nonlinearity exponent [-] (>= 2, 2 is Darcy-Forchheimer)
 
         # boundary parameters
         self.atm_pressure = 1.01325e5  # atmospheric pressure [Pa]
@@ -33,15 +32,15 @@ class Parameters:
         self.E = 0.1  # maximum error to Forchheimer accepted [-]
 
         # call internal functions
-        self._read_background(folder + perm_folder)
+        self._read_background(folder)
         self._compute_and_print()
 
     # ------------------------------------------------------------------------------#
 
-    def _read_background(self, perm_folder):
+    def _read_background(self, folder):
         self.perm_layer = []
         for pos, layer in enumerate(self.layers):
-            perm_file = perm_folder + str(layer) + ".tar.gz"
+            perm_file = folder + "/spe10_perm/" + str(layer) + ".tar.gz"
             self.perm_layer.append(np.loadtxt(perm_file, delimiter=",") * pp.DARCY)
 
     # ------------------------------------------------------------------------------#
@@ -50,21 +49,12 @@ class Parameters:
         # compute parameters from given ones above
         self.nu = self.mu / self.rho  # fluid's kinematic viscosity [m2/s]
         self.Fo_c = self.E / (1 - self.E)  # critical Forchheimer number [-]
-        self.beta = self.c_F / self.rho  # Forchheimer drag coefficient [kg/m3]
 
         # print newly computed parameters
         print("---- Print the parameters ----")
-        print(
-            "mu =",
-            round(self.mu, 5),
-            "[Pa.s]",
-            " rho =",
-            round(self.rho, 5),
-            "[kg/m3]",
-            " Fo_c =",
-            round(self.Fo_c, 5),
-            "[-]",
-        )
+        print("mu =", round(self.mu, 5), "[Pa.s]",
+              " rho =", round(self.rho, 5), "[kg/m3]",
+              " Fo_c =", round(self.Fo_c, 5), "[-]")
 
         num_wells = len(self.wells)
         for l in range(num_wells):

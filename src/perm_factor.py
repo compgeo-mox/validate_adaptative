@@ -5,14 +5,14 @@ from scipy import interpolate
 
 # ------------------------------------------------------------------------------#
 
-def perm_factor(coeffs, ranges=None, region=None):
+def perm_factor(coeffs, law_order, ranges=None, region=None):
     assert not(ranges is None and region is None), "At least ranges or a region must be provided"
 
     # if no ranges are provided, then no convolution is done
     if ranges is None:
         # get number of cells, with convention 0 if law is not space-dependent
         num_cells = np.asarray(coeffs[0]).ndim * np.asarray(coeffs[0]).size
-        law_order = len(coeffs) # highest order of law (darcy is 1 and forch is 2)
+        #law_order = len(coeffs) # highest order of law (darcy is 1 and forch is 2)
 
         # compute and return flux-dependent permeability factor
         K_inv = inv_perm(coeffs, region, num_cells, law_order)
@@ -20,7 +20,7 @@ def perm_factor(coeffs, ranges=None, region=None):
 
     else: # with convolution
         num_cells = np.asarray(coeffs[0][0]).ndim * np.asarray(coeffs[0][0]).size
-        law_order = len(coeffs[0])
+        #law_order = len(coeffs[0])
         num_regions = len(ranges)
 
         # compute and return permeability factor from convolution and interpolation
@@ -32,23 +32,28 @@ def perm_factor(coeffs, ranges=None, region=None):
 # ------------------------------------------------------------------------------#
 
 def inv_perm(coeffs, region, num_cells, law_order):
+    M = int(np.floor(law_order))
+
     # build (primitives of) powers for polynomial laws
-    ppowers = [lambda a, j=j: np.power(np.abs(a),j/2) for j in range(law_order)]
+    ppowers = [lambda a, j=j: np.power(np.abs(a), j/2) for j in range(M - 1)]
+    ppowers = ppowers + [lambda a: np.power(np.abs(a), (law_order-1)/2)]
 
     # compute inverse permeability factor by multiplying powers by coefficients and adding up
     if num_cells == 0: # law is not space_dependent
-        K_inv = f_sum([f_mult(coeffs[j],ppowers[j]) for j in range(law_order)])
+        K_inv = f_sum([f_mult(coeffs[j], ppowers[j]) for j in range(M)])
     else: # law is space-dependent
-        coeffs_region = [coeffs[j][region] for j in range(law_order)]
+        coeffs_region = [coeffs[j][region] for j in range(M)]
         num_cells_region = len(coeffs_region[0])
-        K_inv = [f_sum([f_mult(coeffs_region[j][k],ppowers[j]) \
-                           for j in range(law_order)]) for k in range(num_cells_region)]
+        K_inv = [f_sum([f_mult(coeffs_region[j][k], ppowers[j]) \
+                           for j in range(M)]) for k in range(num_cells_region)]
 
     return K_inv
 
 # ------------------------------------------------------------------------------#
 
 def convolution_terms(coeffs, ranges, num_cells, law_order, num_regions):
+    M = int(np.floor(law_order))
+
     # copy ranges and coeffs for safety
     ranges_all = ranges.copy()
     coeffs_all = coeffs.copy()
@@ -65,12 +70,13 @@ def convolution_terms(coeffs, ranges, num_cells, law_order, num_regions):
     coeffs_all[0] = [coeffs_cst] + coeffs_all[0]
     for i in range(num_regions-1):
         coeffs_cst = 2*np.sum(1/(j+2)*(coeffs_all[i][j+1] - coeffs_all[i+1][j]) \
-                              for j in range(law_order))
+                              for j in range(M-1))
+        coeffs_cst += 2/(law_order+1)*(coeffs_all[i][M] - coeffs_all[i+1][M-1])
         coeffs_cst += coeffs_all[i][0]
         coeffs_all[i+1] = [coeffs_cst] + coeffs_all[i+1]
 
     # add coefficients of negative-flux region (region 0)
-    coeffs_0 = [init_zero for j in range(law_order+1)]
+    coeffs_0 = [init_zero for j in range(M+1)]
     coeffs_0[0] = coeffs_all[0][0]
     coeffs_0[1] = coeffs_all[0][1]
     coeffs_all = [coeffs_0] + coeffs_all
@@ -78,8 +84,12 @@ def convolution_terms(coeffs, ranges, num_cells, law_order, num_regions):
     # build powers for polynomial laws
     powers = []
     for i in range(num_regions+1):
-        powers_i = [lambda a, i=i, j=j: 2/(j+2)*a*np.power(np.abs(a),j/2)*ranges_all[i](a) \
-                    for j in range(law_order)]
+        powers_i = [lambda a, i=i, j=j: \
+                    2/(j+2)*a*np.power(np.abs(a), j/2)*ranges_all[i](a) \
+                    for j in range(M-1)]
+        powers_i = powers_i + \
+            [lambda a, i=i: 
+             2/(law_order+1)*a*np.power(np.abs(a), (law_order-1)/2)*ranges_all[i](a)]
         powers_i = [lambda a, i=i: 1*ranges_all[i](a)] + powers_i
         powers = powers + [powers_i]
 
@@ -88,6 +98,8 @@ def convolution_terms(coeffs, ranges, num_cells, law_order, num_regions):
 # ------------------------------------------------------------------------------#
 
 def convolution(coeffs, ranges, powers, num_cells, law_order, num_regions):
+    M = int(np.floor(law_order))
+
     # convolution PARAMETERS #
     a_max = 20 # largest square flux allowed in convolved permeability factor
     n_conv = int(2*np.floor(1e6/2)+1) # convolution resolution, odd to center convolution at 0
@@ -111,7 +123,7 @@ def convolution(coeffs, ranges, powers, num_cells, law_order, num_regions):
         Phi_region = []
         for i in range(num_regions+1):
             Phi_region = Phi_region + [f_sum([f_mult(coeffs[i][j],powers[i][j]) \
-                                              for j in range(law_order+1)])]
+                                              for j in range(M+1)])]
             Phi = f_sum(Phi_region)
 
         # compute the convolution
@@ -124,20 +136,22 @@ def convolution(coeffs, ranges, powers, num_cells, law_order, num_regions):
         # compute the convolution and interpolation simultaneously
         I_conv_region = []
         for i in range(num_regions+1):
-            conv_pow_i = [signal.convolve(2*G_prime(b), powers[i][j](b2), mode="same")*dx \
-                          for j in range(law_order+1)]
+            conv_pow_i = [signal.convolve(2*G_prime(b), powers[i][j](b2), \
+                                          mode="same")*dx for j in range(M+1)]
             I_pow_i = [interpolate.interp1d(b_pos, conv_pow_i[j][idx0:], kind="cubic") \
-                       for j in range(law_order+1)]
-            I_conv_region = I_conv_region + [ [f_sum([f_mult(coeffs[i][j][k],I_pow_i[j]) \
-                                                      for j in range(law_order+1)]) \
-                                               for k in range(num_cells)] ]
+                       for j in range(M+1)]
+            I_conv_region = I_conv_region + \
+                [ [f_sum([f_mult(coeffs[i][j][k],I_pow_i[j]) \
+                          for j in range(M+1)]) \
+                   for k in range(num_cells)] ]
 
         # get inverse permeability factor
         I_K_inv = [f_sum([I_conv_region[i][k] for i in range(num_regions+1)]) \
                    for k in range(num_cells)]
 
     # check I_K_inv and law match by plotting and getting error in convolution
-    plot_and_get_errors(I_K_inv, coeffs, ranges, num_cells, law_order, num_regions, b_pos)
+    plot_and_get_errors(I_K_inv, coeffs, ranges, num_cells, law_order, \
+                        num_regions, b_pos)
 
     return I_K_inv, a_max
 
@@ -180,25 +194,30 @@ def K_fct(a, K_inv, num_cells, a_max=None):
 # ------------------------------------------------------------------------------#
 
 def plot_and_get_errors(I_K_inv, coeffs, ranges, num_cells, law_order, num_regions, b_pos):
+    M = int(np.floor(law_order))
+
     # build (primitives of) powers for polynomial laws
     ppowers = []
     for i in range(num_regions):
-        ppowers_i = [lambda a, i=i, j=j: np.power(np.abs(a),j/2)*ranges[i](a) \
-                    for j in range(law_order)]
+        ppowers_i = [lambda a, i=i, j=j: np.power(np.abs(a), j/2)*ranges[i](a) \
+                    for j in range(M-1)]
+        ppowers_i = ppowers_i + \
+            [lambda a, i=i: np.power(np.abs(a), (law_order-1)/2)*ranges[i](a)]
         ppowers = ppowers + [ppowers_i]
 
     # define exact (non-convolved) inverse permeability factor, phi
     phi_region = []
     if num_cells == 0: # law is not space-dependent
         for i in range(num_regions):
-            phi_region = phi_region + [f_sum([f_mult(coeffs[i+1][j+1],ppowers[i][j]) \
-                                              for j in range(law_order)])]
+            phi_region = phi_region + [f_sum([f_mult(coeffs[i+1][j+1], ppowers[i][j]) \
+                                              for j in range(M)])]
             phi = f_sum(phi_region)
     else: # law is space-dependent
         for i in range(num_regions):
-            phi_region = phi_region + [ [f_sum([f_mult(coeffs[i+1][j+1][k],ppowers[i][j]) \
-                                                for j in range(law_order)]) \
-                                         for k in range(num_cells)] ]
+            phi_region = phi_region + \
+                [ [f_sum([f_mult(coeffs[i+1][j+1][k],ppowers[i][j]) \
+                          for j in range(M)]) \
+                   for k in range(num_cells)] ]
         phi = [f_sum([phi_region[i][k] for i in range(num_regions)]) \
                for k in range(num_cells)]
 

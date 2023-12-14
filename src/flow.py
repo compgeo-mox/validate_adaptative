@@ -53,17 +53,17 @@ class Flow(object):
             d["ambient_dimension"] = (self.mdg.dim_max(),)
 
             # assign permeability
-            k = data["k"](sd, d, self)
+            k = self.data["k"](sd, d, self)
 
             # no source term is assumed by the user
             if sd.dim == 1 and sd.well_num == -1:
-                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=1, kzz=1)
+                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k[0], kyy=1, kzz=1)
             elif sd.dim == 2:
-                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=k, kzz=1)
+                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k[0], kyy=k[1], kzz=1)
             elif sd.dim == 3:
-                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=k, kzz=k)
+                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k[0], kyy=k[1], kzz=k[2])
             elif sd.dim == 1 and sd.well_num > -1:
-                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k, kyy=1, kzz=1)
+                param["second_order_tensor"] = pp.SecondOrderTensor(kxx=k[0], kyy=1, kzz=1)
                 param["well_radius"] = data["well_radius"]
 
             param["source"] = data["source"](sd, d, self)

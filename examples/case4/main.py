@@ -6,13 +6,13 @@ import scipy.sparse as sps
 from data import Data
 import sys
 
-sys.path.insert(0, "examples/case1/")
+sys.path.insert(0, "../case1/")
 from problem import Problem
 from parameters import Parameters
 
 import sys
 
-sys.path.insert(0, "src/")
+sys.path.insert(0, "../../src/")
 from flow import Flow
 from exporter import write_network_pvd
 from solver_codim2 import MVEMCodim2
@@ -20,14 +20,14 @@ from compute_error import compute_error
 
 # ------------------------------------------------------------------------------#
 
-main_folder = "./examples/case4/"
+main_folder = "../case4/"
 
 
 def add_wells(mdg, domain, well_coords, well_num_cells, tol):
     # define the wells
     wells = np.array([pp.Well(e) for e in well_coords])
 
-    # the mesh size is determined by the lenght of the wells and the imposed num_cells
+    # the mesh size is determined by the length of the wells and the imposed num_cells
     wells_length = np.array([np.linalg.norm(e[:, 1] - e[:, 0]) for e in well_coords])
     mesh_size = np.amin(wells_length / well_num_cells)
 
@@ -60,13 +60,13 @@ def main(region, parameters, problem, data):
     # set files and folders to work with
     file_name = "case4"
     if region == None:
-        folder_name = main_folder + "./solutions/adaptive/"
+        folder_name = main_folder + "solutions/adaptive/"
     elif region == "region":
-        folder_name = main_folder + "./solutions/heterogeneous/"
+        folder_name = main_folder + "solutions/heterogeneous/"
     elif region == "region_darcy":
-        folder_name = main_folder + "./solutions/darcy/"
+        folder_name = main_folder + "solutions/darcy/"
     elif region == "region_forch":
-        folder_name = main_folder + "./solutions/forch/"
+        folder_name = main_folder + "solutions/forch/"
 
     variable_to_export = [
         Flow.pressure,
@@ -145,7 +145,8 @@ def main(region, parameters, problem, data):
         pp.set_solution_values(Flow.P0_flux, flux, d, 0)
         pp.set_solution_values(Flow.P0_flux + "_old", flux.copy(), d, 0)
 
-    variable_to_export += problem.save_perm()
+    variable_to_export += problem.save_perm()  # add intrinsic permeability to visualize
+    variable_to_export += (problem.save_forch_vars())  # add Forchheimer number and other vars
 
     # non-linear problem solution with a fixed point strategy
     err_non_linear = max_err_non_linear + 1
@@ -196,6 +197,12 @@ def main(region, parameters, problem, data):
             err_non_linear / norm_flux_old if norm_flux_old != 0 else err_non_linear
         )
 
+        # save new Forchheimer number
+        for sd, d in problem.mdg.subdomains(return_data=True):
+            if sd.dim != 1 or sd.well_num <= -1:
+                flux_forch = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
+                problem.save_forch_vars(flux=flux_forch)
+
         # exporter
         save = pp.Exporter(problem.mdg, "sol_" + file_name, folder_name=folder_name)
         save.write_vtu(variable_to_export, time_step=iteration_non_linear)
@@ -212,10 +219,12 @@ def main(region, parameters, problem, data):
     write_network_pvd(file_name, folder_name, np.arange(iteration_non_linear))
 
     for sd, d in problem.mdg.subdomains(return_data=True):
-        if region is None:
-            np.savetxt(Flow.region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
-        flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
-        pressure = d[pp.TIME_STEP_SOLUTIONS][Flow.pressure][0]
+        if sd.dim != 1 or sd.well_num <= -1:
+            if region is None:
+                file_name_region = main_folder + "regions/" + Flow.region
+                np.savetxt(file_name_region, d[pp.TIME_STEP_SOLUTIONS][Flow.region][0])
+            flux = d[pp.TIME_STEP_SOLUTIONS][Flow.P0_flux][0]
+            pressure = d[pp.TIME_STEP_SOLUTIONS][Flow.pressure][0]
 
     return flux, pressure, problem.mdg
 
@@ -224,10 +233,7 @@ def main(region, parameters, problem, data):
 
 
 def run_test():
-    folder_case1 = "examples/case1/"
-
-    parameters = Parameters(
-        folder_case1, 50, layers=np.arange(7)  # 35
+    parameters = Parameters(main_folder, val_well=50, layers=np.arange(7)  # 35
     )  # get parameters, print them and read porosity
     problem = Problem(
         parameters,
@@ -269,7 +275,7 @@ def run_test():
     if compute_errors:
         p = (p_darcy, p_forch, p_hete)
         q = (q_darcy, q_forch, q_hete)
-        compute_error(mdg, p, q, folder=main_folder)
+        compute_error(mdg, *p, *q, folder=main_folder)
 
 
 if __name__ == "__main__":
