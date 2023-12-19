@@ -122,9 +122,9 @@ def convolution(coeffs, ranges, powers, num_cells, law_order, num_regions):
         # define term to convolve (primitive of law), Phi
         Phi_region = []
         for i in range(num_regions+1):
-            Phi_region = Phi_region + [f_sum([f_mult(coeffs[i][j],powers[i][j]) \
+            Phi_region = Phi_region + [f_sum([f_mult(coeffs[i][j], powers[i][j]) \
                                               for j in range(M+1)])]
-            Phi = f_sum(Phi_region)
+        Phi = f_sum(Phi_region)
 
         # compute the convolution
         conv = signal.convolve(2*G_prime(b), Phi(b2), mode="same")*dx
@@ -141,7 +141,7 @@ def convolution(coeffs, ranges, powers, num_cells, law_order, num_regions):
             I_pow_i = [interpolate.interp1d(b_pos, conv_pow_i[j][idx0:], kind="cubic") \
                        for j in range(M+1)]
             I_conv_region = I_conv_region + \
-                [ [f_sum([f_mult(coeffs[i][j][k],I_pow_i[j]) \
+                [ [f_sum([f_mult(coeffs[i][j][k], I_pow_i[j]) \
                           for j in range(M+1)]) \
                    for k in range(num_cells)] ]
 
@@ -211,11 +211,11 @@ def plot_and_get_errors(I_K_inv, coeffs, ranges, num_cells, law_order, num_regio
         for i in range(num_regions):
             phi_region = phi_region + [f_sum([f_mult(coeffs[i+1][j+1], ppowers[i][j]) \
                                               for j in range(M)])]
-            phi = f_sum(phi_region)
+        phi = f_sum(phi_region)
     else: # law is space-dependent
         for i in range(num_regions):
             phi_region = phi_region + \
-                [ [f_sum([f_mult(coeffs[i+1][j+1][k],ppowers[i][j]) \
+                [ [f_sum([f_mult(coeffs[i+1][j+1][k], ppowers[i][j]) \
                           for j in range(M)]) \
                    for k in range(num_cells)] ]
         phi = [f_sum([phi_region[i][k] for i in range(num_regions)]) \
@@ -229,9 +229,8 @@ def plot_and_get_errors(I_K_inv, coeffs, ranges, num_cells, law_order, num_regio
     fig1 = plt.figure(1)
     x_max = 2 # maximum on x-axis
     plt.xlim([0, x_max])
-    plt.ylim([phi(0)-1.e-10, phi(x_max)+1.e-10])
     plt.plot(b_pos, I_K_inv(b_pos))
-    plt.plot(b_pos, phi(b_pos))
+    plt.plot(b_pos, phi(b_pos) + I_K_inv(0) - phi(0)) # shifted to appear better on same plot
     plt.savefig("./figures/inv_perm_fact_conv.png")
     print("plot of inverse permeability factor done")
     print("convolution Linfty error: ", \
