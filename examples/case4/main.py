@@ -82,35 +82,35 @@ def main(region, parameters, problem, data):
     hx, hy, hz = problem.physdims / problem.shape
 
     # add the wells
-    well_hight = 6.5
+    well_height = 6.5
     well_coords = np.asarray(
         [
             np.array(
                 [
                     [0.5 * hx, 0.5 * hx],
                     [0.5 * hy, 0.5 * hy],
-                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
+                    [problem.physdims[2], problem.physdims[2] - well_height * hz],
                 ]
             ),
             np.array(
                 [
                     [problem.physdims[0] - 0.5 * hx, problem.physdims[0] - 0.5 * hx],
                     [0.5 * hy, 0.5 * hy],
-                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
+                    [problem.physdims[2], problem.physdims[2] - well_height * hz],
                 ]
             ),
             np.array(
                 [
                     [0.5 * hx, 0.5 * hx],
                     [problem.physdims[1] - 0.5 * hy, problem.physdims[1] - 0.5 * hy],
-                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
+                    [problem.physdims[2], problem.physdims[2] - well_height * hz],
                 ]
             ),
             np.array(
                 [
                     [problem.physdims[0] - 0.5 * hx, problem.physdims[0] - 0.5 * hx],
                     [problem.physdims[1] - 0.5 * hy, problem.physdims[1] - 0.5 * hy],
-                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
+                    [problem.physdims[2], problem.physdims[2] - well_height * hz],
                 ]
             ),
             np.array(
@@ -123,7 +123,7 @@ def main(region, parameters, problem, data):
                         0.5 * problem.physdims[1] - 0.5 * hy,
                         0.5 * problem.physdims[1] - 0.5 * hy,
                     ],
-                    [problem.physdims[2], problem.physdims[2] - well_hight * hz],
+                    [problem.physdims[2], problem.physdims[2] - well_height * hz],
                 ]
             ),
         ]
@@ -237,8 +237,8 @@ def run_test():
     )  # get parameters, print them and read porosity
     problem = Problem(
         parameters,
-        pos_x=np.arange(30),  # + 15,
-        pos_y=np.arange(40),  # + 40  # 20 20
+        pos_x=np.arange(10),  # + 15,
+        pos_y=np.arange(20),  # + 40  # 20 20
     )  # create the grid bucket and get intrinsic permeability
     data = Data(
         parameters, problem, main_folder

@@ -18,6 +18,7 @@ class Parameters:
         self.m = 2 # nonlinearity exponent [-] (>= 2, 2 is Darcy-Forchheimer)
 
         # boundary parameters
+        self.bdry_conditions = "neu"   # "neu" or "dir"
         self.atm_pressure = 1.01325e5  # atmospheric pressure [Pa]
 
         # wells
@@ -40,7 +41,7 @@ class Parameters:
     def _read_background(self, folder):
         self.perm_layer = []
         for pos, layer in enumerate(self.layers):
-            perm_file = folder + "/spe10_perm/" + str(layer) + ".tar.gz"
+            perm_file = folder + "spe10_perm/" + str(layer) + ".tar.gz"
             self.perm_layer.append(np.loadtxt(perm_file, delimiter=",") * pp.DARCY)
 
     # ------------------------------------------------------------------------------#

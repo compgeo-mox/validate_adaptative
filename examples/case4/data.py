@@ -134,28 +134,28 @@ class Data:
     # ------------------------------------------------------------------------------#
 
     def bc(self, sd, data, tol, flow_solver):
+        # get boundary faces
+        b_faces = sd.tags["domain_boundary_faces"].nonzero()[0]
+
         # define the labels and values for the boundary faces
-        bc_val = np.zeros(sd.num_faces)
-
-        # get necessary parameters
-        rho = self.parameters.rho
-        atm_pressure = self.parameters.atm_pressure
-        g = self.parameters.g
-        h = self.parameters.layer_depth
-
-        val_well = 150
         #print(sd.dim, sd.well_num)
+        bc_val = np.zeros(sd.num_faces)
         if sd.dim == 1 and sd.well_num > -1:
-            b_faces = sd.tags["domain_boundary_faces"].nonzero()[0]
-            labels = np.array(["neu"])
+            bc = self.parameters.bdry_conditions
+            labels = np.array([bc])
             #print(sd.well_num, sd.cell_faces.todense())
-            if sd.well_num == 4:
-                bc_val[b_faces] = val_well
+            if bc == "dir":
+                if sd.well_num == 2 or sd.well_num == 0 or sd.well_num == 4:
+                    bc_val[b_faces] = 5e7
+                else:
+                    bc_val[b_faces] = 1e7
             else:
-                bc_val[b_faces] = -val_well / 4
-
+                val_well = 150
+                if sd.well_num == 4:
+                    bc_val[b_faces] = val_well
+                else:
+                    bc_val[b_faces] = -val_well / 4
         else:
-            b_faces = sd.tags["domain_boundary_faces"].nonzero()[0]
             labels = np.array(["neu"] * b_faces.size)
 
         return labels, bc_val

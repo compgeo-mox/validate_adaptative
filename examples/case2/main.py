@@ -70,6 +70,7 @@ def main(region, problem, data):
 
         A, b = discr.matrix_rhs()
         x = sps.linalg.spsolve(A, b)
+
         discr.extract(x, u_bar=1)  # u_bar=1 here because fluxes are normalized by u_bar
 
         # compute the exit condition

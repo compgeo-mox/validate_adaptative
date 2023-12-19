@@ -70,13 +70,16 @@ def main(region, parameters, problem, data, out_folder):
 
         A, b = discr.matrix_rhs()
 
-        vect = np.zeros((1, A.shape[0]))
-        num_cells = problem.mdg.num_subdomain_cells()
-        vect[0, -num_cells:] = 1
-        A = sps.bmat([[A, vect.T], [vect, None]], format="csc")
-        b = np.concatenate((b, [0]))
-
-        x = sps.linalg.spsolve(A, b)[:-1]
+        if parameters.bdry_conditions == "dir":
+            x = sps.linalg.spsolve(A, b)
+        else:
+            vect = np.zeros((1, A.shape[0]))
+            num_cells = problem.mdg.num_subdomain_cells()
+            vect[0, -num_cells:] = 1
+            A = sps.bmat([[A, vect.T], [vect, None]], format="csc")
+            b = np.concatenate((b, [0]))
+            x = sps.linalg.spsolve(A, b)[:-1]            
+        
         discr.extract(x, u_bar=1)  # u_bar=1 here because fluxes are normalized by u_bar
 
         # compute the exit condition
@@ -138,12 +141,8 @@ def run_test(layer, val_well, main_folder, out_folder):
     parameters = Parameters(
         main_folder, val_well=val_well, layers=layer
     )  # get parameters, print them and read porosity
-    problem = Problem(
-        parameters
-    )  # create the grid bucket and get intrinsic permeability
-    data = Data(
-        parameters, problem, out_folder
-    )  # get data for computation of flux-dependent permeability
+    problem = Problem(parameters)  # create the grid bucket and get intrinsic permeability
+    data = Data(parameters, problem, out_folder)  # get data for computation of flux-dependent permeability
 
     # run the various schemes
     print("", "---- Perform the adaptive scheme ----", sep="\n")

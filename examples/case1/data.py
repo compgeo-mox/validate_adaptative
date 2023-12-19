@@ -148,10 +148,12 @@ class Data:
         h = self.parameters.layer_depth
 
         # define the labels and values for the boundary faces
-        labels = np.array(["neu"] * b_faces.size)
+        bc = self.parameters.bdry_conditions
+        labels = np.array([bc] * b_faces.size)
         bc_val = np.zeros(sd.num_faces)
 
-        #bc_val[b_faces] = atm_pressure + rho * g * h  # hydrostatic pressure all around
+        if bc == "dir":
+            bc_val[b_faces] = atm_pressure + rho * g * h  # hydrostatic pressure all around
 
         return labels, bc_val
 
