@@ -229,8 +229,8 @@ def plot_and_get_errors(I_K_inv, coeffs, ranges, num_cells, law_order, num_regio
     fig1 = plt.figure(1)
     x_max = 2 # maximum on x-axis
     plt.xlim([0, x_max])
-    plt.plot(b_pos, I_K_inv(b_pos))
-    plt.plot(b_pos, phi(b_pos) + I_K_inv(0) - phi(0)) # shifted to appear better on same plot
+    plt.plot(b_pos, I_K_inv(b_pos) + phi(0) - I_K_inv(0)) # shifted to appear better on same plot
+    plt.plot(b_pos, phi(b_pos))
     plt.savefig("./figures/inv_perm_fact_conv.png")
     print("plot of inverse permeability factor done")
     print("convolution Linfty error: ", \
