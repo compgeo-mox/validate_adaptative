@@ -36,18 +36,14 @@ class Parameters:
             lens_h2 = dict(bounds=lambda x, y: 3.2 < x < 9 and 5 < y < 5.2, val=0.98)
             lens_h3 = dict(bounds=lambda x, y: 0.9 < x < 8.5 and 6 < y < 6.2, val=0.95)
             lens_h4 = dict(bounds=lambda x, y: 0.6 < x < 8 and 8.4 < y < 8.7, val=0.92)
-            self.lenses = [
-                lens_v1,
-                lens_v2,
-                lens_v3,
-                lens_h1,
-                lens_h2,
-                lens_h3,
-                lens_h4,
-            ]
+            self.lenses = [lens_v1, lens_v2, lens_v3,
+                           lens_h1, lens_h2, lens_h3, lens_h4]
 
         # to determine critical Forchheimer number
         self.E = 0.1  # maximum error to Forchheimer accepted [-]
+
+        # is model to be used dissipative? (cf. paper)
+        self.dissipative = False
 
         # call internal functions
         file_bg = folder + "porosity"  # file containing background porosity or permeability
@@ -96,7 +92,8 @@ class Parameters:
         print("mu =",  round(self.mu, 5), "[Pa.s]",
               " rho =", round(self.rho, 5), "[kg/m3]",
               " influx =", round(self.influx, 5), "[kg/m2/s]",
-              " Fo_c =", round(self.Fo_c, 5), "[-]")
+              " Fo_c =", round(self.Fo_c, 5), "[-]",
+              " m = ", self.m, "[-]")
 
         num_lenses = len(self.lenses)
         if self.data_kind == "poro":

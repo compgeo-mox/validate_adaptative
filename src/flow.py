@@ -2,6 +2,7 @@ import numpy as np
 import porepy as pp
 
 from well_coupling import WellCoupling
+from weighted_norm import *
 
 
 class Flow(object):
@@ -131,6 +132,9 @@ class Flow(object):
     # ------------------------------------------------------------------------------#
 
     def extract(self, x, u_bar=None):
+        perm_diss = self.data["perm_diss"]
+        diss = self.data["dissipative"]
+
         self.assembler.distribute_variable(x)
 
         discr = self.discr(self.model)
@@ -138,11 +142,11 @@ class Flow(object):
             var = data[pp.TIME_STEP_SOLUTIONS][self.variable][0]
             pressure = discr.extract_pressure(sd, var, data)
             flux = discr.extract_flux(sd, var, data)
-            perm = data[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
+            k = data[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
 
             pp.set_solution_values(self.pressure, pressure, data, 0)
             pp.set_solution_values(self.flux, flux, data, 0)
-            pp.set_solution_values(self.permeability, perm, data, 0)
+            pp.set_solution_values(self.permeability, k, data, 0)
 
             if "original_id" in sd.tags:
                 original_id = sd.tags["original_id"] * np.ones(sd.num_cells)
@@ -155,13 +159,13 @@ class Flow(object):
         # export the P0 flux reconstruction
         pp.project_flux(self.mdg, discr, self.flux, self.P0_flux, self.mortar)
 
-        for _, data in self.mdg.subdomains(return_data=True):
+        for sd, data in self.mdg.subdomains(return_data=True):
             flux = data[pp.TIME_STEP_SOLUTIONS][self.P0_flux][0]
-            norm = np.linalg.norm(flux, axis=0)
+            norm = weighted_norm(flux, perm_diss, sd.dim) if diss else np.linalg.norm(flux, axis=0)
             pp.set_solution_values(self.P0_flux_norm, norm, data, 0)
 
-            perm = data[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
-            gradient = -flux / perm
+            k = data[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
+            gradient = -flux / k
             pp.set_solution_values(self.gradient_pressure, gradient, data, 0)
 
             if u_bar is not None:

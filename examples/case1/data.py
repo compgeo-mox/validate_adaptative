@@ -22,21 +22,38 @@ class Data:
         u_bar = self.problem.u_bar
         m = self.parameters.m
         nu = self.parameters.nu
-        alpha = self.parameters.nu * u_bar  # multiply by u_bar for normalization
-        beta = self.parameters.c_F * np.power(u_bar, m)  # idem
+        c_F = self.parameters.c_F
+        diss = self.parameters.dissipative
+        if diss:
+            factor = nu/(np.power(c_F, 2/(m - 1)))
+            alpha = factor * u_bar 
+            beta = factor * np.power(u_bar, m)
+        else:
+            alpha = nu * u_bar  # multiply by u_bar for normalization
+            beta = nu * c_F * np.power(u_bar, m)  # idem
         zero = 0.0  # to be put as second-order term in Darcy region
 
         # convert drag coefficients to arrays if intrinsic permeability is heterogeneous
         mu = self.parameters.mu
-        kappa = problem.kappa  # intrinsic permeability # 
+        kappa = problem.kappa
         homogeneous_perm = True if np.unique(kappa).size == 1 else False
 
-        if (homogeneous_perm is True 
+        if (homogeneous_perm 
             and (np.asarray(alpha).size == 1 and np.asarray(beta).size == 1)):
-            beta *= nu * np.power(kappa[0]/mu, m-1)
+            if diss:
+                denom = np.square(kappa[0]/mu)
+                alpha /= denom
+                beta /= denom
+            else:
+                beta *= np.power(kappa[0]/mu, m-1)
         else:
-            alpha *= np.ones(kappa.size)
-            beta *= nu * np.power(kappa/mu, m-1)
+            if diss:
+                denom = np.square(kappa/mu)
+                alpha /= denom
+                beta /= denom
+            else:
+                alpha *= np.ones(kappa.size)
+                beta *= np.power(kappa/mu, m-1)
             zero *= np.ones(kappa.size)
 
         # gather all law coefficients in one list
@@ -74,13 +91,20 @@ class Data:
     # ------------------------------------------------------------------------------#
 
     def effective_perm(self, sd, d, flow_solver):
+        perm = self.problem.perm
+        perm_diss = self.problem.perm_diss
+        diss = self.parameters.dissipative
+
         # set a fake permeability for the 0d grids
         if sd.dim == 0:
             return np.zeros(sd.num_cells)
 
         # cell flux
         flux = d[pp.TIME_STEP_SOLUTIONS][flow_solver.P0_flux][0]
-        flux_norm2 = np.square(weighted_norm(flux, self.problem.perm, sd.dim))
+        if diss:
+            flux_norm2 = np.square(weighted_norm(flux, perm_diss, sd.dim))
+        else:
+            flux_norm2 = np.square(np.linalg.norm(flux, axis=0))
 
         # retrieve flux-dependent perm factor and multiply it by intrinsic permeability
         if self.region is None:
@@ -94,11 +118,15 @@ class Data:
             k[forch_region] = self.k_forch(flux_norm2[forch_region])
 
         # return k multiplied by diagonal intrinsic permeability
-        dim = self.problem.perm.shape[1]
-        K = [np.multiply(k, self.problem.perm[:, 0])]
-        for j in range(1, dim):
-            K.append(np.multiply(k, self.problem.perm[:, j]))
-        return K
+        if diss:
+            k_mult = [np.multiply(k, perm_diss[:, 0])]
+            for j in range(1, sd.dim):
+                k_mult.append(np.multiply(k, perm_diss[:, j]))
+        else:
+            k_mult = [np.multiply(k, perm[:, 0])]
+            for j in range(1, sd.dim):
+                k_mult.append(np.multiply(k, perm[:, j]))
+        return k_mult
 
     # ------------------------------------------------------------------------------#
 
@@ -109,6 +137,8 @@ class Data:
             "source": self.source,
             "vector_source": self.vector_source,
             "tol": self.tol,
+            "perm_diss": self.problem.perm_diss,
+            "dissipative": self.parameters.dissipative
         }
 
     # ------------------------------------------------------------------------------#

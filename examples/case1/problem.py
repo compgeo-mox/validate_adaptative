@@ -121,23 +121,36 @@ class Problem(object):
         c_F = self.parameters.c_F
         Fo_c = self.parameters.Fo_c
         M = self.parameters.m - 1
+        diss = self.parameters.dissipative
 
         dim = self.sd.dim 
-        factor = 0
+        u_bar_factor = 0
         if dim > 0:
             kappa = kappa_min = self.perm[:, 0]
             for j in range(1, dim):
                 kappa = [k * l for k, l in zip(kappa, self.perm[:, j])]
                 kappa_min = [np.minimum(k, l) for k, l in zip(kappa_min, self.perm[:, j])]
             self.kappa = np.asarray([np.power(k, 1/dim) for k in kappa])
-            self.kappa_min = np.asarray(kappa_min)
-            factor = np.min(np.asarray(
-                mu*np.sqrt(self.kappa_min)/(self.kappa*np.power(c_F, 1/M))
-            ))
+            if diss:
+                u_bar_factor = 1
+            else: 
+                self.kappa_min = np.asarray(kappa_min)
+                u_bar_factor = np.min(np.asarray(
+                    mu*np.sqrt(self.kappa_min)/(self.kappa*np.power(c_F, 1/M))
+                ))
 
-        self.u_bar = factor * np.power(Fo_c, 1/M) # threshold flux [kg/m2/s]
+        self.u_bar = u_bar_factor * np.power(Fo_c, 1/M) # threshold flux
 
-        print("u_bar =", round(self.u_bar, 5), "[kg/m2/s]")
+        if diss:
+            print("u_bar =", round(self.u_bar, 5), "[-]")
+        else:
+            print("u_bar =", round(self.u_bar, 5), "[kg/m2/s]")
+
+        # we also compute a refactored permeability useful in dissipative model
+        gamma = np.power(c_F, 2/M) * np.square(self.kappa/mu) if diss else 1
+        self.perm_diss = np.empty(self.perm.shape)
+        for j in range(self.perm.shape[1]):
+            self.perm_diss[:, j] = np.divide(self.perm[:, j], gamma)
 
     # ------------------------------------------------------------------------------#
 
@@ -169,30 +182,24 @@ class Problem(object):
 
     def save_forch_vars(self, flux=None):
         names = [
-            "Forchheimer number", "upper Forchheimer number", \
+            "Forchheimer number", \
             "P0_darcy_flux_denormalized", "P0_darcy_flux_denormalized_norm", \
-            "P0_darcy_velocity_denormalized", "P0_darcy_velocity_denormalized_norm"]
+            "P0_darcy_velocity", "P0_darcy_velocity_norm"]
 
         # for visualization export the Forchheimer number and denormalized fluxes (*u_bar)
         if flux is None:  # no flux is given: only give name of variable to visualize
             return names
         else:  # flux is given: compute Forchheimer number and store it
-            Fo_c = self.parameters.Fo_c
             rho = self.parameters.rho
             M = self.parameters.m - 1
+            diss = self.parameters.dissipative
             u_bar = self.u_bar
             for sd, d in self.mdg.subdomains(return_data=True):
-                if sd.dim == self.mdg.dim_max():
-                    pp.set_solution_values(names[0], 
-                                           Fo_c * np.power(self.kappa_min, M/2) * 
-                                           np.power(weighted_norm(flux, self.perm, sd.dim),
-                                                    M), d, 0)
-                    pp.set_solution_values(names[1], 
-                                           Fo_c * np.power(np.linalg.norm(flux, axis=0), 
-                                                           M), d, 0)
-                    pp.set_solution_values(names[2], flux * u_bar, d, 0)
-                    pp.set_solution_values(names[3], 
-                                           np.linalg.norm(flux * u_bar, axis=0), d, 0)
-                    pp.set_solution_values(names[4], flux/rho * u_bar, d, 0)
-                    pp.set_solution_values(names[5], 
-                                           np.linalg.norm(flux/rho * u_bar, axis=0), d, 0)
+                flux_denorm = flux * u_bar
+                norm_flux = weighted_norm(flux_denorm, self.perm_diss, sd.dim) if diss \
+                    else np.linalg.norm(flux_denorm, axis=0)
+                pp.set_solution_values(names[0], np.power(norm_flux, M), d, 0)
+                pp.set_solution_values(names[1], flux_denorm, d, 0)
+                pp.set_solution_values(names[2], norm_flux, d, 0)
+                pp.set_solution_values(names[3], flux_denorm/rho, d, 0)
+                pp.set_solution_values(names[4], norm_flux/rho, d, 0)

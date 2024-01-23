@@ -18,7 +18,7 @@ class Parameters:
         self.m = 2 # nonlinearity exponent [-] (>= 2, 2 is Darcy-Forchheimer)
 
         # boundary parameters
-        self.bdry_conditions = "neu"   # "neu" or "dir"
+        self.bdry_conditions = "dir"   # "neu" or "dir"
         self.atm_pressure = 1.01325e5  # atmospheric pressure [Pa]
 
         # wells
@@ -31,6 +31,9 @@ class Parameters:
 
         # to determine critical Forchheimer number
         self.E = 0.1  # maximum error to Forchheimer accepted [-]
+
+        # is model to be used dissipative? (cf. paper)
+        self.dissipative = False
 
         # call internal functions
         self._read_background(folder)
@@ -55,7 +58,8 @@ class Parameters:
         print("---- Print the parameters ----")
         print("mu =", round(self.mu, 5), "[Pa.s]",
               " rho =", round(self.rho, 5), "[kg/m3]",
-              " Fo_c =", round(self.Fo_c, 5), "[-]")
+              " Fo_c =", round(self.Fo_c, 5), "[-]",
+              " m = ", self.m, "[-]")
 
         num_wells = len(self.wells)
         for l in range(num_wells):
