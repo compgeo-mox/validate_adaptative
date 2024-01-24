@@ -138,7 +138,7 @@ class Data:
             k[darcy_region] = self.k_darcy(flux_norm2[darcy_region])
             k[forch_region] = self.k_forch(flux_norm2[forch_region])
 
-        # return k multiplied by diagonal intrinsic permeability        
+        # return k multiplied by diagonal intrinsic permeability
         if diss:
             k_mult = [np.multiply(k, perm_diss[:, 0])]
             for j in range(1, sd.dim):

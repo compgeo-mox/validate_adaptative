@@ -142,7 +142,7 @@ class Flow(object):
             var = data[pp.TIME_STEP_SOLUTIONS][self.variable][0]
             pressure = discr.extract_pressure(sd, var, data)
             flux = discr.extract_flux(sd, var, data)
-            k = data[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
+            k = data[pp.PARAMETERS][self.model]["second_order_tensor"].values.diagonal()
 
             pp.set_solution_values(self.pressure, pressure, data, 0)
             pp.set_solution_values(self.flux, flux, data, 0)
@@ -161,11 +161,18 @@ class Flow(object):
 
         for sd, data in self.mdg.subdomains(return_data=True):
             flux = data[pp.TIME_STEP_SOLUTIONS][self.P0_flux][0]
-            norm = weighted_norm(flux, perm_diss, sd.dim) if diss else np.linalg.norm(flux, axis=0)
-            pp.set_solution_values(self.P0_flux_norm, norm, data, 0)
+            k = data[pp.PARAMETERS][self.model]["second_order_tensor"].values.diagonal()
 
-            k = data[pp.PARAMETERS][self.model]["second_order_tensor"].values[0, 0]
-            gradient = -flux / k
+            if diss: 
+                if sd.dim == 1 and sd.well_num > -1:
+                    norm = weighted_norm(flux, k, k.shape[0])
+                else:
+                    norm = weighted_norm(flux, perm_diss, sd.dim)
+            else:
+                norm = np.linalg.norm(flux, axis=0)
+
+            pp.set_solution_values(self.P0_flux_norm, norm, data, 0)
+            gradient = - np.divide(flux.T, k)
             pp.set_solution_values(self.gradient_pressure, gradient, data, 0)
 
             if u_bar is not None:

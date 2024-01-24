@@ -132,10 +132,10 @@ class Problem(object):
             print("u_bar =", round(self.u_bar, 5), "[kg/m2/s]")
 
         # we also compute a refactored permeability useful in dissipative model
-        gamma = np.power(c_F, 2/M) * np.square(self.kappa/mu) if diss else 1
+        denom = np.power(c_F, 2/M) * np.square(self.kappa/mu) if diss else 1
         self.perm_diss = np.empty(self.perm.shape)
         for j in range(self.perm.shape[1]):
-            self.perm_diss[:, j] = np.divide(self.perm[:, j], gamma)
+            self.perm_diss[:, j] = np.divide(self.perm[:, j], denom)
 
     # ------------------------------------------------------------------------------#
 

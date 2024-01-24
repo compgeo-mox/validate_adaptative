@@ -18,7 +18,7 @@ class Parameters:
         self.m = 2 # nonlinearity exponent [-] (>= 2, 2 is Darcy-Forchheimer)
 
         # boundary parameters
-        self.bdry_conditions = "dir"   # "neu" or "dir"
+        self.bdry_conditions = "neu"   # "neu" or "dir"
         self.atm_pressure = 1.01325e5  # atmospheric pressure [Pa]
 
         # wells
@@ -33,7 +33,7 @@ class Parameters:
         self.E = 0.1  # maximum error to Forchheimer accepted [-]
 
         # is model to be used dissipative? (cf. paper)
-        self.dissipative = False
+        self.dissipative = True
 
         # call internal functions
         self._read_background(folder)

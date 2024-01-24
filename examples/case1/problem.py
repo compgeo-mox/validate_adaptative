@@ -147,10 +147,10 @@ class Problem(object):
             print("u_bar =", round(self.u_bar, 5), "[kg/m2/s]")
 
         # we also compute a refactored permeability useful in dissipative model
-        gamma = np.power(c_F, 2/M) * np.square(self.kappa/mu) if diss else 1
+        denom = np.power(c_F, 2/M) * np.square(self.kappa/mu) if diss else 1
         self.perm_diss = np.empty(self.perm.shape)
         for j in range(self.perm.shape[1]):
-            self.perm_diss[:, j] = np.divide(self.perm[:, j], gamma)
+            self.perm_diss[:, j] = np.divide(self.perm[:, j], denom)
 
     # ------------------------------------------------------------------------------#
 
@@ -195,11 +195,12 @@ class Problem(object):
             diss = self.parameters.dissipative
             u_bar = self.u_bar
             for sd, d in self.mdg.subdomains(return_data=True):
-                flux_denorm = flux * u_bar
-                norm_flux = weighted_norm(flux_denorm, self.perm_diss, sd.dim) if diss \
-                    else np.linalg.norm(flux_denorm, axis=0)
-                pp.set_solution_values(names[0], np.power(norm_flux, M), d, 0)
-                pp.set_solution_values(names[1], flux_denorm, d, 0)
-                pp.set_solution_values(names[2], norm_flux, d, 0)
-                pp.set_solution_values(names[3], flux_denorm/rho, d, 0)
-                pp.set_solution_values(names[4], norm_flux/rho, d, 0)
+                if sd.dim == self.mdg.dim_max():
+                    flux_denorm = flux * u_bar
+                    norm_flux = weighted_norm(flux_denorm, self.perm_diss, sd.dim) if diss \
+                        else np.linalg.norm(flux_denorm, axis=0)
+                    pp.set_solution_values(names[0], np.power(norm_flux, M), d, 0)
+                    pp.set_solution_values(names[1], flux_denorm, d, 0)
+                    pp.set_solution_values(names[2], norm_flux, d, 0)
+                    pp.set_solution_values(names[3], flux_denorm/rho, d, 0)
+                    pp.set_solution_values(names[4], norm_flux/rho, d, 0)
