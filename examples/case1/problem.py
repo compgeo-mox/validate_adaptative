@@ -3,7 +3,8 @@ from scipy.stats import hmean
 import porepy as pp
 
 import sys
-sys.path.insert(0, "../../src/")
+
+sys.path.insert(0, "src/")
 
 from weighted_norm import *
 
@@ -76,7 +77,9 @@ class Problem(object):
 
     # ------------------------------------------------------------------------------#
 
-    def _create_mdg(self,):
+    def _create_mdg(
+        self,
+    ):
         self.sd = pp.CartGrid(self.shape, self.physdims)
         self.sd.compute_geometry()
 
@@ -123,23 +126,29 @@ class Problem(object):
         M = self.parameters.m - 1
         diss = self.parameters.dissipative
 
-        dim = self.sd.dim 
+        dim = self.sd.dim
         u_bar_factor = 0
         if dim > 0:
             kappa = kappa_min = self.perm[:, 0]
             for j in range(1, dim):
                 kappa = [k * l for k, l in zip(kappa, self.perm[:, j])]
-                kappa_min = [np.minimum(k, l) for k, l in zip(kappa_min, self.perm[:, j])]
-            self.kappa = np.asarray([np.power(k, 1/dim) for k in kappa])
+                kappa_min = [
+                    np.minimum(k, l) for k, l in zip(kappa_min, self.perm[:, j])
+                ]
+            self.kappa = np.asarray([np.power(k, 1 / dim) for k in kappa])
             if diss:
                 u_bar_factor = 1
-            else: 
+            else:
                 self.kappa_min = np.asarray(kappa_min)
-                u_bar_factor = np.min(np.asarray(
-                    mu*np.sqrt(self.kappa_min)/(self.kappa*np.power(c_F, 1/M))
-                ))
+                u_bar_factor = np.min(
+                    np.asarray(
+                        mu
+                        * np.sqrt(self.kappa_min)
+                        / (self.kappa * np.power(c_F, 1 / M))
+                    )
+                )
 
-        self.u_bar = u_bar_factor * np.power(Fo_c, 1/M) # threshold flux
+        self.u_bar = u_bar_factor * np.power(Fo_c, 1 / M)  # threshold flux
 
         if diss:
             print("u_bar =", round(self.u_bar, 5), "[-]")
@@ -147,7 +156,7 @@ class Problem(object):
             print("u_bar =", round(self.u_bar, 5), "[kg/m2/s]")
 
         # we also compute a refactored permeability useful in dissipative model
-        denom = np.power(c_F, 2/M) * np.square(self.kappa/mu) if diss else 1
+        denom = np.power(c_F, 2 / M) * np.square(self.kappa / mu) if diss else 1
         self.perm_diss = np.empty(self.perm.shape)
         for j in range(self.perm.shape[1]):
             self.perm_diss[:, j] = np.divide(self.perm[:, j], denom)
@@ -155,8 +164,15 @@ class Problem(object):
     # ------------------------------------------------------------------------------#
 
     def save_perm(self):
-        names = ["log10_perm_xx", "log10_perm_yy", "log10_perm_zz", "layer_id", 
-                 "perm_xx", "perm_yy", "perm_zz"]
+        names = [
+            "log10_perm_xx",
+            "log10_perm_yy",
+            "log10_perm_zz",
+            "layer_id",
+            "perm_xx",
+            "perm_yy",
+            "perm_zz",
+        ]
 
         # for visualization export the intrinsic perm and layer id
         for sd, d in self.mdg.subdomains(return_data=True):
@@ -182,9 +198,12 @@ class Problem(object):
 
     def save_forch_vars(self, flux=None):
         names = [
-            "Forchheimer number", \
-            "P0_darcy_flux_denormalized", "P0_darcy_flux_denormalized_norm", \
-            "P0_darcy_velocity", "P0_darcy_velocity_norm"]
+            "Forchheimer number",
+            "P0_darcy_flux_denormalized",
+            "P0_darcy_flux_denormalized_norm",
+            "P0_darcy_velocity",
+            "P0_darcy_velocity_norm",
+        ]
 
         # for visualization export the Forchheimer number and denormalized fluxes (*u_bar)
         if flux is None:  # no flux is given: only give name of variable to visualize
@@ -197,10 +216,13 @@ class Problem(object):
             for sd, d in self.mdg.subdomains(return_data=True):
                 if sd.dim == self.mdg.dim_max():
                     flux_denorm = flux * u_bar
-                    norm_flux = weighted_norm(flux_denorm, self.perm_diss, sd.dim) if diss \
+                    norm_flux = (
+                        weighted_norm(flux_denorm, self.perm_diss, sd.dim)
+                        if diss
                         else np.linalg.norm(flux_denorm, axis=0)
+                    )
                     pp.set_solution_values(names[0], np.power(norm_flux, M), d, 0)
                     pp.set_solution_values(names[1], flux_denorm, d, 0)
                     pp.set_solution_values(names[2], norm_flux, d, 0)
-                    pp.set_solution_values(names[3], flux_denorm/rho, d, 0)
-                    pp.set_solution_values(names[4], norm_flux/rho, d, 0)
+                    pp.set_solution_values(names[3], flux_denorm / rho, d, 0)
+                    pp.set_solution_values(names[4], norm_flux / rho, d, 0)

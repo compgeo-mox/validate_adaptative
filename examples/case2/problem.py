@@ -2,7 +2,7 @@ import numpy as np
 import porepy as pp
 
 import sys
-sys.path.insert(0, "../../src/")
+sys.path.insert(0, "./src/")
 
 from weighted_norm import *
 
@@ -108,7 +108,7 @@ class Problem(object):
         M = self.parameters.m - 1
         diss = self.parameters.dissipative
 
-        dim = self.sd.dim 
+        dim = self.sd.dim
         u_bar_factor = 0
         if dim > 0:
             kappa = kappa_min = self.perm[:, 0]
@@ -118,7 +118,7 @@ class Problem(object):
             self.kappa = np.asarray([np.power(k, 1/dim) for k in kappa])
             if diss:
                 u_bar_factor = 1
-            else: 
+            else:
                 self.kappa_min = np.asarray(kappa_min)
                 u_bar_factor = np.min(np.asarray(
                     mu*np.sqrt(self.kappa_min)/(self.kappa*np.power(c_F, 1/M))

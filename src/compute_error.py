@@ -56,18 +56,18 @@ def compute_error(
         print("------")
 
         print("Errors for the heterogeneous scheme:")
-        print("Pressure", err_p_hete)
-        print("Flux", err_q_hete)
+        print("Pressure {:.2e}".format(err_p_hete))
+        print("Flux {:.2e}".format(err_q_hete))
         print("------")
 
         print("Errors for the Darcy scheme:")
-        print("Pressure", err_p_darcy)
-        print("Flux", err_q_darcy)
+        print("Pressure {:.2e}".format(err_p_darcy))
+        print("Flux {:.2e}".format(err_q_darcy))
         print("------")
 
         print("Errors for the Forchheimer scheme:")
-        print("Pressure", err_p_forch)
-        print("Flux", err_q_forch)
+        print("Pressure {:.2e}".format(err_p_forch))
+        print("Flux {:.2e}".format(err_q_forch))
 
     print(
         " ",
@@ -107,15 +107,25 @@ def compute_error(
     print("------")
 
     print("Errors for the heterogeneous scheme:")
-    print("Pressure", err_p_hete)
-    print("Flux", err_q_hete)
+    print("Pressure {:.2e}".format(err_p_hete))
+    print("Flux {:.2e}".format(err_q_hete))
     print("------")
 
     print("Errors for the Darcy scheme:")
-    print("Pressure", err_p_darcy)
-    print("Flux", err_q_darcy)
+    print("Pressure {:.2e}".format(err_p_darcy))
+    print("Flux {:.2e}".format(err_q_darcy))
     print("------")
 
     print("Errors for the Forchheimer scheme:")
-    print("Pressure", err_p_forch)
-    print("Flux", err_q_forch)
+    print("Pressure {:.2e}".format(err_p_forch))
+    print("Flux {:.2e}".format(err_q_forch))
+
+    return (
+        err_p_hete,
+        err_q_hete,
+        err_p_darcy,
+        err_q_darcy,
+        err_p_forch,
+        err_q_forch,
+        region,
+    )

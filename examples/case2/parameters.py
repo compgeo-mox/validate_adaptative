@@ -5,7 +5,7 @@ import porepy as pp
 
 
 class Parameters:
-    def __init__(self, folder, subcase="couple"):
+    def __init__(self, folder, subcase="couple", E=None):
         # 2d box geometry
         self.length_x = 10  # box x-axis size [m]
         self.length_y = 10  # box y-axis size [m]
@@ -15,10 +15,10 @@ class Parameters:
         self.rho = 998.0  # fluid's density [kg/m3]
         self.c_F = 0.55  # Forchheimer coefficient [-]
         self.g = 9.81  # gravity [m/s2]
-        self.m = 2 # nonlinearity exponent [-] (>= 2, 2 is Darcy-Forchheimer)
+        self.m = 2  # nonlinearity exponent [-] (>= 2, 2 is Darcy-Forchheimer)
 
         # boundary parameters
-        self.influx = 0.007  # fluid's influx at top boundary [kg/m2/s]
+        self.influx = 7e-2  # fluid's influx at top boundary [kg/m2/s]
         self.atm_pressure = 1.01325e5  # atmospheric pressure [Pa]
 
         # high-permeability lenses
@@ -31,22 +31,36 @@ class Parameters:
         elif subcase == "network":
             lens_v1 = dict(bounds=lambda x, y: 4 < x < 4.2 and 0.5 < y < 9, val=0.99)
             lens_v2 = dict(bounds=lambda x, y: 7.2 < x < 7.4 and 3 < y < 8.8, val=0.94)
-            lens_v3 = dict(bounds=lambda x, y: 1.2 < x < 1.5 and 0.7 < y < 9.6, val=0.97)
+            lens_v3 = dict(
+                bounds=lambda x, y: 1.2 < x < 1.5 and 0.7 < y < 9.6, val=0.97
+            )
             lens_h1 = dict(bounds=lambda x, y: 0.6 < x < 7 and 1 < y < 1.2, val=0.91)
             lens_h2 = dict(bounds=lambda x, y: 3.2 < x < 9 and 5 < y < 5.2, val=0.98)
             lens_h3 = dict(bounds=lambda x, y: 0.9 < x < 8.5 and 6 < y < 6.2, val=0.95)
             lens_h4 = dict(bounds=lambda x, y: 0.6 < x < 8 and 8.4 < y < 8.7, val=0.92)
-            self.lenses = [lens_v1, lens_v2, lens_v3,
-                           lens_h1, lens_h2, lens_h3, lens_h4]
+            self.lenses = [
+                lens_v1,
+                lens_v2,
+                lens_v3,
+                lens_h1,
+                lens_h2,
+                lens_h3,
+                lens_h4,
+            ]
 
         # to determine critical Forchheimer number
-        self.E = 0.1  # maximum error to Forchheimer accepted [-]
+        if E is not None:
+            self.E = E
+        else:
+            self.E = 0.1  # maximum error to Forchheimer accepted [-]
 
         # is model to be used dissipative? (cf. paper)
         self.dissipative = False
 
         # call internal functions
-        file_bg = folder + "porosity"  # file containing background porosity or permeability
+        file_bg = (
+            folder + "porosity"
+        )  # file containing background porosity or permeability
         self._read_background(file_bg)
         self._compute_and_print()
 
@@ -77,8 +91,12 @@ class Parameters:
         self.bg_array = np.asarray(bg_list)  # array of bg porosity of permeability
 
         lines_bg_array = np.asarray(lines_bg_list)
-        self.num_cells_x = int(np.max(lines_bg_array[:, 0]))  # number of cells on x-axis
-        self.num_cells_y = int(np.max(lines_bg_array[:, 1]))  # number of cells on y-axis
+        self.num_cells_x = int(
+            np.max(lines_bg_array[:, 0])
+        )  # number of cells on x-axis
+        self.num_cells_y = int(
+            np.max(lines_bg_array[:, 1])
+        )  # number of cells on y-axis
 
     # ------------------------------------------------------------------------------#
 
@@ -89,11 +107,23 @@ class Parameters:
 
         # print newly computed parameters
         print("---- Print the parameters ----")
-        print("mu =",  round(self.mu, 5), "[Pa.s]",
-              " rho =", round(self.rho, 5), "[kg/m3]",
-              " influx =", round(self.influx, 5), "[kg/m2/s]",
-              " Fo_c =", round(self.Fo_c, 5), "[-]",
-              " m = ", self.m, "[-]")
+        print(
+            "mu =",
+            round(self.mu, 5),
+            "[Pa.s]",
+            " rho =",
+            round(self.rho, 5),
+            "[kg/m3]",
+            " influx =",
+            round(self.influx, 5),
+            "[kg/m2/s]",
+            " Fo_c =",
+            round(self.Fo_c, 5),
+            "[-]",
+            " m = ",
+            self.m,
+            "[-]",
+        )
 
         num_lenses = len(self.lenses)
         if self.data_kind == "poro":

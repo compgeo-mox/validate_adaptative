@@ -8,7 +8,8 @@ from parameters import Parameters
 from data import Data
 
 import sys
-sys.path.insert(0, "../../src/")
+
+sys.path.insert(0, "./src/")
 
 from flow import Flow
 
@@ -18,10 +19,10 @@ from compute_error import compute_error
 
 # ------------------------------------------------------------------------------#
 
-main_folder = "../case2/"
+main_folder = "./examples/case2/"
 
 
-def main(region, problem, data):
+def run_problem(region, problem, data):
     # set files and folders to work with
     file_name = "case2"
     if region == None:
@@ -58,13 +59,17 @@ def main(region, problem, data):
         pp.set_solution_values(Flow.P0_flux + "_old", flux.copy(), d, 0)
 
     variable_to_export += problem.save_perm()  # add intrinsic permeability to visualize
-    variable_to_export += (problem.save_forch_vars())  # add Forchheimer number and other vars
+    variable_to_export += (
+        problem.save_forch_vars()
+    )  # add Forchheimer number and other vars
 
     # non-linear problem solution with a fixed point strategy
     err_non_linear = max_err_non_linear + 1
     iteration_non_linear = 0
-    while (err_non_linear > max_err_non_linear
-           and iteration_non_linear < max_iteration_non_linear):
+    while (
+        err_non_linear > max_err_non_linear
+        and iteration_non_linear < max_iteration_non_linear
+    ):
         # solve the linearized problem
         discr.set_data(data.get())
 
@@ -128,33 +133,40 @@ def main(region, problem, data):
 
 # ------------------------------------------------------------------------------#
 
-if __name__ == "__main__":
-    parameters = Parameters(main_folder, "network")  # get parameters, print them and read porosity
-    problem = Problem(parameters)  # create the grid bucket and get intrinsic permeability
-    data = Data(parameters, problem, main_folder)  # get data for computation of flux-dependent permeability
+
+def main(E):
+    parameters = Parameters(
+        main_folder, "network", E
+    )  # get parameters, print them and read porosity # couple or network
+    problem = Problem(
+        parameters
+    )  # create the grid bucket and get intrinsic permeability
+    data = Data(
+        parameters, problem, main_folder
+    )  # get data for computation of flux-dependent permeability
 
     # run the various schemes
     print("", "---- Perform the adaptive scheme ----", sep="\n")
     start = time.time()
-    q_adapt, p_adapt, mdg = main(None, problem, data)
+    q_adapt, p_adapt, mdg = run_problem(None, problem, data)
     end = time.time()
     print("run time =", end - start, "[s]")
 
     print("", "---- Perform the heterogeneous scheme ----", sep="\n")
     start = time.time()
-    q_hete, p_hete, _ = main("region", problem, data)
+    q_hete, p_hete, _ = run_problem("region", problem, data)
     end = time.time()
     print("run time =", end - start, "[s]")
 
     print("", "---- Perform the Darcy scheme ----", sep="\n")
     start = time.time()
-    q_darcy, p_darcy, _ = main("region_darcy", problem, data)
+    q_darcy, p_darcy, _ = run_problem("region_darcy", problem, data)
     end = time.time()
     print("run time =", end - start, "[s]")
 
     print("", "---- Perform the Forchheimer scheme ----", sep="\n")
     start = time.time()
-    q_forch, p_forch, _ = main("region_forch", problem, data)
+    q_forch, p_forch, _ = run_problem("region_forch", problem, data)
     end = time.time()
     print("run time =", end - start, "[s]")
 
@@ -164,4 +176,45 @@ if __name__ == "__main__":
     if compute_errors:
         p = (p_darcy, p_forch, p_hete)
         q = (q_darcy, q_forch, q_hete)
-        compute_error(mdg, *p, *q, folder=main_folder)
+        err_p_hete, err_q_hete, _, _, _, _, region = compute_error(
+            mdg, *p, *q, folder=main_folder
+        )
+
+    return err_p_hete, err_q_hete, region
+
+
+if __name__ == "__main__":
+    inv_E_vec = np.array(
+        [
+            4,
+            10,
+            20,
+            40,
+            100,
+            200,
+            400,
+            1000,
+            2000,
+            4000,
+            10000,
+            20000,
+            40000,
+            100000,
+            200000,
+            400000,
+        ]
+    )
+    err_p = []
+    err_q = []
+    num_F = []
+    for inv_E in inv_E_vec:
+        out = main(1 / inv_E)
+
+        err_p.append(out[0])
+        err_q.append(out[1])
+        num_F.append((out[2].size - out[2].sum()) / out[2].size)
+
+    print(err_p, err_q, num_F)
+
+    file_name = main_folder + "output.txt"
+    np.savetxt(file_name, (inv_E_vec, err_p, err_q, num_F), delimiter=",")
