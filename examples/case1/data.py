@@ -4,7 +4,6 @@ import porepy as pp
 import sys
 
 sys.path.insert(0, "./src/")
-# import tags
 from perm_factor import *
 from weighted_norm import *
 
@@ -25,8 +24,8 @@ class Data:
         c_F = self.parameters.c_F
         diss = self.parameters.dissipative
         if diss:
-            factor = nu/(np.power(c_F, 2/(m - 1)))
-            alpha = factor * u_bar 
+            factor = nu / (np.power(c_F, 2 / (m - 1)))
+            alpha = factor * u_bar
             beta = factor * np.power(u_bar, m)
         else:
             alpha = nu * u_bar  # multiply by u_bar for normalization
@@ -38,28 +37,31 @@ class Data:
         kappa = problem.kappa
         homogeneous_perm = True if np.unique(kappa).size == 1 else False
 
-        if (homogeneous_perm 
-            and (np.asarray(alpha).size == 1 and np.asarray(beta).size == 1)):
+        if homogeneous_perm and (
+            np.asarray(alpha).size == 1 and np.asarray(beta).size == 1
+        ):
             if diss:
-                denom = np.square(kappa[0]/mu)
+                denom = np.square(kappa[0] / mu)
                 alpha /= denom
                 beta /= denom
             else:
-                beta *= np.power(kappa[0]/mu, m-1)
+                beta *= np.power(kappa[0] / mu, m - 1)
         else:
             if diss:
-                denom = np.square(kappa/mu)
+                denom = np.square(kappa / mu)
                 alpha /= denom
                 beta /= denom
             else:
                 alpha *= np.ones(kappa.size)
-                beta *= np.power(kappa/mu, m-1)
+                beta *= np.power(kappa / mu, m - 1)
             zero *= np.ones(kappa.size)
 
         # gather all law coefficients in one list
         M = int(np.floor(m))
-        self.coeffs = [[alpha] + [zero for j in range(1, M)], 
-                       [alpha] + [zero for j in range(1, M - 1)] + [beta]]
+        self.coeffs = [
+            [alpha] + [zero for j in range(1, M)],
+            [alpha] + [zero for j in range(1, M - 1)] + [beta],
+        ]
 
         # ranges to define regions (normalized by u_bar)
         range_1 = lambda a: np.logical_and(a >= 0, a <= 1)  # slow-flux region (Darcy)
@@ -138,7 +140,7 @@ class Data:
             "vector_source": self.vector_source,
             "tol": self.tol,
             "perm_diss": self.problem.perm_diss,
-            "dissipative": self.parameters.dissipative
+            "dissipative": self.parameters.dissipative,
         }
 
     # ------------------------------------------------------------------------------#
@@ -183,7 +185,9 @@ class Data:
         bc_val = np.zeros(sd.num_faces)
 
         if bc == "dir":
-            bc_val[b_faces] = atm_pressure + rho * g * h  # hydrostatic pressure all around
+            bc_val[b_faces] = (
+                atm_pressure + rho * g * h
+            )  # hydrostatic pressure all around
 
         return labels, bc_val
 

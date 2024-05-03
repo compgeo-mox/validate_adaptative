@@ -1,10 +1,9 @@
 import numpy as np
 import porepy as pp
-from functools import partial
 
 import sys
 
-sys.path.insert(0, "../../src/")
+sys.path.insert(0, "./src/")
 from perm_factor import *
 from weighted_norm import *
 
@@ -25,8 +24,8 @@ class Data:
         c_F = self.parameters.c_F
         diss = self.parameters.dissipative
         if diss:
-            factor = nu/(np.power(c_F, 2/(m - 1)))
-            alpha = factor * u_bar 
+            factor = nu / (np.power(c_F, 2 / (m - 1)))
+            alpha = factor * u_bar
             beta = factor * np.power(u_bar, m)
         else:
             alpha = nu * u_bar  # multiply by u_bar for normalization
@@ -38,28 +37,31 @@ class Data:
         kappa = problem.kappa
         homogeneous_perm = True if np.unique(kappa).size == 1 else False
 
-        if (homogeneous_perm 
-            and (np.asarray(alpha).size == 1 and np.asarray(beta).size == 1)):
+        if homogeneous_perm and (
+            np.asarray(alpha).size == 1 and np.asarray(beta).size == 1
+        ):
             if diss:
-                denom = np.square(kappa[0]/mu)
+                denom = np.square(kappa[0] / mu)
                 alpha /= denom
                 beta /= denom
             else:
-                beta *= np.power(kappa[0]/mu, m-1)
+                beta *= np.power(kappa[0] / mu, m - 1)
         else:
             if diss:
-                denom = np.square(kappa/mu)
+                denom = np.square(kappa / mu)
                 alpha /= denom
                 beta /= denom
             else:
                 alpha *= np.ones(kappa.size)
-                beta *= np.power(kappa/mu, m-1)
+                beta *= np.power(kappa / mu, m - 1)
             zero *= np.ones(kappa.size)
 
         # gather all law coefficients in one list
         M = int(np.floor(m))
-        self.coeffs = [[alpha] + [zero for j in range(1, M)], 
-                       [alpha] + [zero for j in range(1, M - 1)] + [beta]]
+        self.coeffs = [
+            [alpha] + [zero for j in range(1, M)],
+            [alpha] + [zero for j in range(1, M - 1)] + [beta],
+        ]
 
         # ranges to define regions (normalized by u_bar)
         range_1 = lambda a: np.logical_and(a >= 0, a <= 1)  # slow-flux region (Darcy)
@@ -71,22 +73,8 @@ class Data:
 
     # ------------------------------------------------------------------------------#
 
-    def get(self):
-        return {
-            "k": self.effective_perm,
-            "bc": self.bc,
-            "source": self.source,
-            "vector_source": self.vector_source,
-            "well_radius": self.well_radius,
-            "tol": self.tol,
-            "perm_diss": self.problem.perm_diss,
-            "dissipative": self.parameters.dissipative
-        }
-
-    # ------------------------------------------------------------------------------#
-
     def get_perm_factor(self, region=None):
-        # compute speed-dependent perm factor by convolution (region is None) or region-wise
+        # compute flux-dependent perm factor by convolution (region is None) or region-wise
         m = self.parameters.m
         if region is None:  # use convolution
             self.region = None
@@ -117,9 +105,14 @@ class Data:
             return np.zeros(sd.num_cells)
 
         if sd.dim == 1 and sd.well_num > -1:
-            k = np.pi * np.square(self.well_radius) * np.ones(sd.num_cells) * self.well_perm
+            k = (
+                np.pi
+                * np.square(self.well_radius)
+                * np.ones(sd.num_cells)
+                * self.well_perm
+            )
             return [k]
-            
+
         # cell flux
         flux = d[pp.TIME_STEP_SOLUTIONS][flow_solver.P0_flux][0]
         if diss:
@@ -127,7 +120,7 @@ class Data:
         else:
             flux_norm2 = np.square(np.linalg.norm(flux, axis=0))
 
-        # retrieve speed-dependent perm factor and multiply it by intrinsic permeability
+        # retrieve flux-dependent perm factor and multiply it by intrinsic permeability
         if self.region is None:
             k = self.k_adapt(flux_norm2)
         else:
@@ -151,6 +144,21 @@ class Data:
 
     # ------------------------------------------------------------------------------#
 
+    def get(self):
+        return {
+            "k": self.effective_perm,
+            "bc": self.bc,
+            "source": self.source,
+            "vector_source": self.vector_source,
+            "tol": self.tol,
+            "perm_diss": self.problem.perm_diss,
+            "dissipative": self.parameters.dissipative,
+            "well_radius": self.well_radius,
+            "well_perm": self.well_perm,
+        }
+
+    # ------------------------------------------------------------------------------#
+
     def source(self, sd, d, flow_solver):
         return np.zeros(sd.num_cells)
 
@@ -168,12 +176,10 @@ class Data:
         b_faces = sd.tags["domain_boundary_faces"].nonzero()[0]
 
         # define the labels and values for the boundary faces
-        #print(sd.dim, sd.well_num)
         bc_val = np.zeros(sd.num_faces)
         if sd.dim == 1 and sd.well_num > -1:
             bc = self.parameters.bdry_conditions
             labels = np.array([bc])
-            #print(sd.well_num, sd.cell_faces.todense())
             if bc == "dir":
                 if sd.well_num == 2 or sd.well_num == 0 or sd.well_num == 4:
                     bc_val[b_faces] = 5e7

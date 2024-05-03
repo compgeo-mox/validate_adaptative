@@ -58,19 +58,17 @@ def main(folder, file_name, file_out, legend):
             inv_e, h_p, h_v, fraction_cells = read_txt(folder, fname)
 
         l1 = ax1.loglog(inv_e, h_p, ltype + "r", label=leg + " - $err_p$")
-        l2 = ax1.loglog(inv_e, h_v, ltype + "b", label=leg + " - $err_q$")
-        l3 = ax2.semilogx(
-            inv_e, fraction_cells, ltype + "g", label=leg + " - $F$-cells"
-        )
+        l2 = ax1.loglog(inv_e, h_v, ltype + "b", label=leg + " - $err_u$")
+        l3 = ax2.semilogx(inv_e, fraction_cells, ltype + "g", label=leg + " - DF-cells")
 
         lns += l1 + l2 + l3
 
     # labs = [l.get_label() for l in lns]
     # ax1.legend(lns, labs, loc="best")
 
-    ax1.set_xlabel("$1/E$")
+    ax1.set_xlabel("$1/\delta$")
     ax1.set_ylabel("$L^2-err \sib{\cdot}$")
-    ax2.set_ylabel("$\sharp D-F$ cells \sib{\percent}")
+    ax2.set_ylabel("ratio DF-cells \sib{\cdot}")
 
     plt.show()
 
